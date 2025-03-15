@@ -2,27 +2,18 @@ using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.UI;
 using ParrelSync;
 
 public class NetworkGameManager : NetworkBehaviour
 {
     public static NetworkGameManager Instance { get; private set; }
-    private Dictionary<ulong, NetworkPlayer> connectedPlayers = new Dictionary<ulong, NetworkPlayer>();
-
-    private void Update()
-    {
-        if (Input.GetKeyDown(KeyCode.H))
-        {
-            Debug.Log("Starting Host...");
-            NetworkManager.Singleton.StartHost();
-        }
-        if (Input.GetKeyDown(KeyCode.C))
-        {
-            Debug.Log("Starting Client...");
-            NetworkManager.Singleton.StartClient();
-        }
-    }
     
+    [SerializeField] private Button hostButton; // Assign in Inspector
+    [SerializeField] private Button joinButton; // Assign in Inspector
+
+    private Dictionary<string, ulong> persistentPlayers = new Dictionary<string, ulong>(); // Store players by Unique ID
+
     private void Awake()
     {
         if (Instance == null)
@@ -38,15 +29,20 @@ public class NetworkGameManager : NetworkBehaviour
     
     private void Start()
     {
-        NetworkManager.Singleton.OnClientConnectedCallback += (clientId) =>
-        {
-            Debug.Log($"Player {clientId} connected.");
-        };
+        if (hostButton != null) hostButton.onClick.AddListener(StartHost);
+        if (joinButton != null) joinButton.onClick.AddListener(StartClient);
+    }
+    
+    public void StartHost()
+    {
+        Debug.Log("Starting Host...");
+        NetworkManager.Singleton.StartHost();
+    }
 
-        NetworkManager.Singleton.OnClientDisconnectCallback += (clientId) =>
-        {
-            Debug.Log($"Player {clientId} disconnected.");
-        };
+    public void StartClient()
+    {
+        Debug.Log("Starting Client...");
+        NetworkManager.Singleton.StartClient();
     }
 
     public override void OnNetworkSpawn()
@@ -60,38 +56,43 @@ public class NetworkGameManager : NetworkBehaviour
 
     private void OnClientConnected(ulong clientId)
     {
-        Debug.Log($"Player {clientId} connected.");
+        Debug.Log($"✅ Player {clientId} has connected.");
 
-        if (connectedPlayers.ContainsKey(clientId))
+        // Find the player's unique ID
+        NetworkPlayer player = FindPlayerByClientId(clientId);
+        if (player != null)
         {
-            Debug.Log($"Player {clientId} rejoined.");
-            return;
+            string uniqueId = player.PlayerUniqueID;
+            if (persistentPlayers.ContainsKey(uniqueId))
+            {
+                Debug.Log($"Player {clientId} (Unique ID: {uniqueId}) has reconnected.");
+            }
+            else
+            {
+                persistentPlayers[uniqueId] = clientId;
+                Debug.Log($"Player {clientId} (Unique ID: {uniqueId}) connected for the first time.");
+            }
         }
-
-        NetworkPlayer player = InstantiatePlayer(clientId);
-        connectedPlayers.Add(clientId, player);
     }
-
 
     private void OnClientDisconnected(ulong clientId)
     {
         Debug.Log($"Player {clientId} disconnected.");
-        
-        if (connectedPlayers.ContainsKey(clientId))
-        {
-            Destroy(connectedPlayers[clientId].gameObject);
-            connectedPlayers.Remove(clientId);
-        }
     }
 
-    private NetworkPlayer InstantiatePlayer(ulong clientId)
+    private NetworkPlayer FindPlayerByClientId(ulong clientId)
     {
-        GameObject playerObject = new GameObject($"Player_{clientId}");
-        NetworkPlayer player = playerObject.AddComponent<NetworkPlayer>();
-        player.SetClientId(clientId);
-        return player;
+        foreach (var obj in FindObjectsOfType<NetworkPlayer>())
+        {
+            if (obj.OwnerClientId == clientId)
+            {
+                return obj;
+            }
+        }
+        return null;
     }
 }
+
 
 
 
