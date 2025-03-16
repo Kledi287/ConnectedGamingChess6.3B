@@ -280,6 +280,24 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 	public void ElectPiece(ElectedPiece choice) {
 		userPromotionChoice = choice;
 	}
+	
+	public void TryMovePiece(GameObject piece, Vector2Int newPosition)
+	{
+		NetworkPlayer player = NetworkPlayer.LocalInstance;
+
+		if (!player.IsMyTurn())
+		{
+			Debug.Log("⛔ Not your turn!");
+			return;
+		}
+
+		// Perform move logic here
+		Debug.Log($"✅ {player.OwnerClientId} moved a piece to {newPosition}");
+
+		// End the turn after a successful move
+		TurnManager.Instance.EndTurnServerRpc();
+	}
+
 
 	/// <summary>
 	/// Handles the event triggered when a visual chess piece is moved.
