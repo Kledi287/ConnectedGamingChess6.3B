@@ -39,10 +39,9 @@ public class NetworkChessManager : NetworkBehaviour
     {
         if (NetworkManager.Singleton.IsServer || NetworkManager.Singleton.IsClient)
         {
-            Debug.LogError("Already running as server or client.");
+            Debug.LogError("Already running.");
             return;
         }
-
         bool started = NetworkManager.Singleton.StartHost();
         Debug.Log($"🎯 Host Started: {started}");
     }
@@ -51,10 +50,9 @@ public class NetworkChessManager : NetworkBehaviour
     {
         if (NetworkManager.Singleton.IsClient || NetworkManager.Singleton.IsServer)
         {
-            Debug.LogError("Already running as client or server.");
+            Debug.LogError("Already running.");
             return;
         }
-
         bool started = NetworkManager.Singleton.StartClient();
         Debug.Log($"🎯 Client started successfully: {started}");
     }
@@ -74,15 +72,14 @@ public class NetworkChessManager : NetworkBehaviour
         if (player != null)
         {
             string uniqueId = player.PlayerUniqueID.Value.ToString();
-
-            if (persistentPlayers.ContainsKey(uniqueId))
+            if (!persistentPlayers.ContainsKey(uniqueId))
             {
-                Debug.Log($"🔄 Player {clientId} (Unique ID: {uniqueId}) reconnected.");
+                persistentPlayers[uniqueId] = clientId;
+                Debug.Log($"✅ Player {clientId} connected for the first time.");
             }
             else
             {
-                persistentPlayers[uniqueId] = clientId;
-                Debug.Log($"✅ Player {clientId} (Unique ID: {uniqueId}) connected for the first time.");
+                Debug.Log($"🔄 Player {clientId} reconnected.");
             }
         }
     }
@@ -107,16 +104,11 @@ public class NetworkChessManager : NetworkBehaviour
     {
         ulong clientId = rpcParams.Receive.SenderClientId;
         NetworkPlayer player = FindPlayerByClientId(clientId);
-        if (player == null)
-        {
-            Debug.LogError("No NetworkPlayer found for client " + clientId);
-            return;
-        }
+        if (player == null) return;
 
-        // Check turn
+        // Out-of-turn => reset piece, no freeze
         if (!player.IsMyTurn())
         {
-            Debug.LogError("Not your turn!");
             ResetPieceClientRpc(from, clientId);
             return;
         }
@@ -124,10 +116,9 @@ public class NetworkChessManager : NetworkBehaviour
         Square startSquare = new Square(from.x, from.y);
         Square endSquare   = new Square(to.x, to.y);
 
-        // Check if move is legal
+        // Illegal move => reset piece, no freeze
         if (!GameManager.Instance.game.TryGetLegalMove(startSquare, endSquare, out Movement move))
         {
-            Debug.LogError("Illegal move");
             ResetPieceClientRpc(from, clientId);
             return;
         }
@@ -135,31 +126,25 @@ public class NetworkChessManager : NetworkBehaviour
         bool executed = GameManager.Instance.TryExecuteMove(move);
         if (!executed)
         {
-            Debug.LogError("Move execution failed on server");
             ResetPieceClientRpc(from, clientId);
             return;
         }
 
-        // Toggle turn (White -> Black, or Black -> White)
+        // Toggle turn (white -> black or black -> white)
         TurnManager.Instance.EndTurnServerRpc();
 
-        // Now enable only the side to move on all clients
+        // Update board so only the next side is enabled
         Side sideToMove = GameManager.Instance.SideToMove;
         UpdateBoardStateClientRpc(sideToMove);
 
-        // Finally, replicate the actual piece movement
+        // Move piece visually
         UpdateBoardClientRpc(from, to);
     }
 
     [ClientRpc]
     private void UpdateBoardClientRpc(Vector2Int from, Vector2Int to)
     {
-        Debug.Log($"[ClientRpc] Move piece from {from} to {to}");
-
-        // Capture
         BoardManager.Instance.TryDestroyVisualPiece(new Square(to.x, to.y));
-
-        // Move the piece
         GameObject pieceGO = BoardManager.Instance.GetPieceGOAtPosition(new Square(from.x, from.y));
         if (pieceGO != null)
         {
@@ -172,21 +157,19 @@ public class NetworkChessManager : NetworkBehaviour
     [ClientRpc]
     private void UpdateBoardStateClientRpc(Side sideToMove)
     {
-        Debug.Log($"[ClientRpc] Enabling only {sideToMove} pieces.");
         BoardManager.Instance.EnsureOnlyPiecesOfSideAreEnabled(sideToMove);
     }
 
     [ClientRpc]
     private void ResetPieceClientRpc(Vector2Int from, ulong targetClientId, ClientRpcParams clientRpcParams = default)
     {
-        // Only the client who made the illegal/out-of-turn move sees this reset
+        // Only the client who made the illegal move sees this reset
         if (NetworkManager.Singleton.LocalClientId != targetClientId) return;
 
-        Debug.Log($"[ClientRpc] Resetting piece at {from}");
         GameObject pieceGO = BoardManager.Instance.GetPieceGOAtPosition(new Square(from.x, from.y));
         if (pieceGO != null)
         {
-            // Snap back to its original position
+            // Snap back
             pieceGO.transform.position = pieceGO.transform.parent.position;
         }
     }

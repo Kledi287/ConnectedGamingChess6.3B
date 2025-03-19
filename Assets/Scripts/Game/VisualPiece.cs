@@ -53,37 +53,36 @@ public class VisualPiece : MonoBehaviour {
 	/// Called when the user presses the mouse button over the piece.
 	/// Records the initial screen-space position of the piece.
 	/// </summary>
-	public void OnMouseDown() {
-		// --- NEW: Local checks to avoid picking up the wrong piece ---
-		if (!NetworkPlayer.LocalInstance.IsMyTurn())
-		{
-			// Not my turn at all
-			return;
-		}
-		// Are we white or black?
-		bool iAmWhite = NetworkPlayer.LocalInstance.IsWhite.Value;
-		// If I'm white but this piece is black => block
-		if (iAmWhite && PieceColor == Side.Black) return;
-		// If I'm black but this piece is white => block
-		if (!iAmWhite && PieceColor == Side.White) return;
-		// --- end NEW checks ---
+	public void OnMouseDown()
+	{
+		// If the script is disabled, OnMouseDown still fires but we can bail out quickly
+		if (!enabled) return;
 
-		if (enabled) {
-			piecePositionSS = boardCamera.WorldToScreenPoint(transform.position);
-		}
+		if (NetworkPlayer.LocalInstance == null) return;
+
+		// Check local turn logic
+		bool myTurn = NetworkPlayer.LocalInstance.IsMyTurn();
+		bool iAmWhite = NetworkPlayer.LocalInstance.IsWhite.Value;
+		if (!myTurn) return; // Not my turn
+		if (iAmWhite && PieceColor == Side.Black) return; // Wrong color
+		if (!iAmWhite && PieceColor == Side.White) return; // Wrong color
+
+		// We can pick up the piece
+		piecePositionSS = boardCamera.WorldToScreenPoint(transform.position);
 	}
 
 	/// <summary>
 	/// Called while the user drags the piece with the mouse.
 	/// Updates the piece's world position to follow the mouse cursor.
 	/// </summary>
-	private void OnMouseDrag() {
-		if (enabled) {
-			// Create a new screen-space position based on the current mouse position,
-			// preserving the original depth (z-coordinate).
-			Vector3 nextPiecePositionSS = new Vector3(Input.mousePosition.x, Input.mousePosition.y, piecePositionSS.z);
-			// Convert the screen-space position back to world-space and update the piece's position.
-			thisTransform.position = boardCamera.ScreenToWorldPoint(nextPiecePositionSS);
+	private void OnMouseDrag()
+	{
+		// If script is disabled, do nothing
+		if (!enabled) return;
+		if (Input.GetMouseButton(0))
+		{
+			Vector3 nextPosSS = new Vector3(Input.mousePosition.x, Input.mousePosition.y, piecePositionSS.z);
+			thisTransform.position = boardCamera.ScreenToWorldPoint(nextPosSS);
 		}
 	}
 
@@ -95,23 +94,21 @@ public class VisualPiece : MonoBehaviour {
 	{
 		if (!enabled) return;
 
-		// Find potential landing squares
 		potentialLandingSquares.Clear();
 		BoardManager.Instance.GetSquareGOsWithinRadius(
 			potentialLandingSquares, thisTransform.position, SquareCollisionRadius
 		);
 
-		// If no squares found, reset piece to original position
 		if (potentialLandingSquares.Count == 0)
 		{
+			// No squares => reset
 			thisTransform.position = thisTransform.parent.position;
 			return;
 		}
 
-		// Find the closest square
+		// Find closest square
 		Transform closestSquareTransform = potentialLandingSquares[0].transform;
 		float shortestDistSqr = (closestSquareTransform.position - thisTransform.position).sqrMagnitude;
-
 		for (int i = 1; i < potentialLandingSquares.Count; i++)
 		{
 			float distSqr = (potentialLandingSquares[i].transform.position - thisTransform.position).sqrMagnitude;
@@ -122,18 +119,14 @@ public class VisualPiece : MonoBehaviour {
 			}
 		}
 
-		// Convert old & new squares into Vector2Int
-		// old = current parent square
+		// Convert to Vector2Int
 		Square oldSquare = StringToSquare(transform.parent.name);
 		Vector2Int from = new Vector2Int(oldSquare.File, oldSquare.Rank);
 
-		// new = closest square
 		Square newSquare = new Square(closestSquareTransform.name);
 		Vector2Int to = new Vector2Int(newSquare.File, newSquare.Rank);
 
-		// ******* NETCODE CALL *******
-		// Instead of local GameManager.OnPieceMoved(...),
-		// call the ServerRpc in your NetworkChessManager.
+		// Send to server
 		NetworkChessManager.Instance.RequestMoveServerRpc(from, to);
 	}
 }
