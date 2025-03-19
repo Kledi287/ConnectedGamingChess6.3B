@@ -14,8 +14,7 @@ public class NetworkPlayer : NetworkBehaviour
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
     );
-
-
+    
     public NetworkVariable<bool> IsWhite = new NetworkVariable<bool>(
         false,
         NetworkVariableReadPermission.Everyone,
@@ -44,4 +43,3 @@ public class NetworkPlayer : NetworkBehaviour
         return TurnManager.Instance.CanMove(IsWhite.Value);
     }
 }
-

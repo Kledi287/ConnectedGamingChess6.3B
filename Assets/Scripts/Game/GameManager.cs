@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -91,7 +91,7 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 	// Reference to the debug utility for the chess engine.
 	[SerializeField] private UnityChessDebug unityChessDebug;
 	// The current game instance.
-	private Game game;
+	public Game game;
 	// Serializers for game state (FEN and PGN formats).
 	private FENSerializer fenSerializer;
 	private PGNSerializer pgnSerializer;
@@ -109,7 +109,7 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 	/// </summary>
 	public void Start() {
 		// Subscribe to the event triggered when a visual piece is moved.
-		VisualPiece.VisualPieceMoved += OnPieceMoved;
+		// VisualPiece.VisualPieceMoved += OnPieceMoved;
 
 		// Initialise the serializers for FEN and PGN formats.
 		serializersByType = new Dictionary<GameSerializationType, IGameSerializer> {
@@ -174,7 +174,7 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 	/// </summary>
 	/// <param name="move">The move to execute.</param>
 	/// <returns>True if the move was successfully executed; otherwise, false.</returns>
-	private bool TryExecuteMove(Movement move) {
+	public bool TryExecuteMove(Movement move) {
 		// Attempt to execute the move within the game logic.
 		if (!game.TryExecuteMove(move)) {
 			return false;
@@ -307,7 +307,7 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 	/// <param name="movedPieceTransform">The transform of the moved piece.</param>
 	/// <param name="closestBoardSquareTransform">The transform of the closest board square.</param>
 	/// <param name="promotionPiece">Optional promotion piece (used in pawn promotion).</param>
-	private async void OnPieceMoved(Square movedPieceInitialSquare, Transform movedPieceTransform, Transform closestBoardSquareTransform, Piece promotionPiece = null) {
+/*	private async void OnPieceMoved(Square movedPieceInitialSquare, Transform movedPieceTransform, Transform closestBoardSquareTransform, Piece promotionPiece = null) {
 		// Determine the destination square based on the name of the closest board square transform.
 		Square endSquare = new Square(closestBoardSquareTransform.name);
 
@@ -346,7 +346,7 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 			movedPieceTransform.parent = closestBoardSquareTransform;
 			movedPieceTransform.position = closestBoardSquareTransform.position;
 		}
-	}
+	} */
 	
 	/// <summary>
 	/// Determines whether the specified piece has any legal moves.

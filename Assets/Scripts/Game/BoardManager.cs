@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections.Generic;
 using UnityChess;
 using UnityEngine;
@@ -122,15 +122,22 @@ public class BoardManager : MonoBehaviourSingleton<BoardManager> {
 	/// </summary>
 	/// <param name="piece">The chess piece to display.</param>
 	/// <param name="position">The board square where the piece should be placed.</param>
-	public void CreateAndPlacePieceGO(Piece piece, Square position) {
-		// Construct the model name based on the piece's owner and type.
+	public void CreateAndPlacePieceGO(Piece piece, Square position)
+	{
 		string modelName = $"{piece.Owner} {piece.GetType().Name}";
-		// Instantiate the piece GameObject from the corresponding resource.
 		GameObject pieceGO = Instantiate(
 			Resources.Load("PieceSets/Marble/" + modelName) as GameObject,
 			positionMap[position].transform
 		);
+
+		// NEW: Assign the correct color to the VisualPiece script
+		VisualPiece vp = pieceGO.GetComponent<VisualPiece>();
+		if (vp != null)
+		{
+			vp.PieceColor = piece.Owner; // e.g. White or Black
+		}
 	}
+
 
 	/// <summary>
 	/// Retrieves all square GameObjects within a specified radius of a world-space position.

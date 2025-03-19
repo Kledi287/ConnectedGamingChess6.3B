@@ -52,7 +52,7 @@ MonoBehaviour:
   SceneMigrationSynchronization: 1
   SpawnWithObservers: 1
   DontDestroyWithOwner: 0
-  AutoObjectParentSync: 0
+  AutoObjectParentSync: 1
 --- !u!114 &-747234520695950781
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -65,5 +65,3 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 019fefce0623e734cb06ad32dd783305, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  IsWhite:
-    m_InternalValue: 0

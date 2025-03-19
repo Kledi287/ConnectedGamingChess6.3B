@@ -38,4 +38,3 @@ public class TurnManager : NetworkBehaviour
         Debug.Log($"🔄 Turn ended. It is now {(IsWhiteTurn.Value ? "White" : "Black")}'s turn.");
     }
 }
-
