@@ -9,8 +9,8 @@ public class NetworkChessManager : NetworkBehaviour
 {
     public static NetworkChessManager Instance;
 
-    [SerializeField] private Button hostButton;
-    [SerializeField] private Button joinButton;
+    [SerializeField] private Button hostButton; 
+    [SerializeField] private Button joinButton; 
 
     private Dictionary<string, ulong> persistentPlayers = new Dictionary<string, ulong>();
 
@@ -39,7 +39,7 @@ public class NetworkChessManager : NetworkBehaviour
     {
         if (NetworkManager.Singleton.IsServer || NetworkManager.Singleton.IsClient)
         {
-            Debug.LogError("Already running.");
+            Debug.LogError("Already running as server or client.");
             return;
         }
         bool started = NetworkManager.Singleton.StartHost();
@@ -50,7 +50,7 @@ public class NetworkChessManager : NetworkBehaviour
     {
         if (NetworkManager.Singleton.IsClient || NetworkManager.Singleton.IsServer)
         {
-            Debug.LogError("Already running.");
+            Debug.LogError("Already running as client or server.");
             return;
         }
         bool started = NetworkManager.Singleton.StartClient();
@@ -69,25 +69,69 @@ public class NetworkChessManager : NetworkBehaviour
     private void OnClientConnected(ulong clientId)
     {
         NetworkPlayer player = FindPlayerByClientId(clientId);
-        if (player != null)
+        if (player == null) return;
+
+        string uniqueId = player.PlayerUniqueID.Value.ToString();
+
+        if (string.IsNullOrEmpty(uniqueId))
         {
-            string uniqueId = player.PlayerUniqueID.Value.ToString();
-            if (!persistentPlayers.ContainsKey(uniqueId))
-            {
-                persistentPlayers[uniqueId] = clientId;
-                Debug.Log($"✅ Player {clientId} connected for the first time.");
-            }
-            else
-            {
-                Debug.Log($"🔄 Player {clientId} reconnected.");
-            }
+            Debug.Log($"⚠ Player {clientId} connected but has no unique ID yet. Waiting for OnValueChanged...");
+            // We do NOT do anything else here. We'll handle them in OnPlayerUniqueIDChanged.
+            return;
         }
+
+        // If the ID is already set, handle them immediately
+        HandlePlayerIDSet(clientId, uniqueId);
     }
 
+    /// <summary>
+    /// Called by NetworkPlayer when a player's ID is finally set (non-empty).
+    /// </summary>
+    public void HandlePlayerIDSet(ulong clientId, string uniqueId)
+    {
+        if (persistentPlayers.ContainsKey(uniqueId))
+        {
+            Debug.Log($"🔄 Player {clientId} (Unique ID: {uniqueId}) has reconnected.");
+            SendBoardToReconnectingClient(clientId);
+        }
+        else
+        {
+            persistentPlayers[uniqueId] = clientId;
+            Debug.Log($"✅ Player {clientId} (Unique ID: {uniqueId}) connected for the first time.");
+            SendBoardToReconnectingClient(clientId);
+        }
+    }
+    
     private void OnClientDisconnected(ulong clientId)
     {
-        Debug.Log($"Player {clientId} disconnected.");
+        Debug.Log($"[Server] Player {clientId} disconnected.");
+
+        // Optionally do NOT remove them from dictionary if you want to preserve ID => client mapping
+        // This ensures next time they rejoin with the same ID, we see "reconnected."
+        /*
+        var toRemove = "";
+        foreach (var kvp in persistentPlayers)
+        {
+            if (kvp.Value == clientId)
+            {
+                toRemove = kvp.Key;
+                break;
+            }
+        }
+        if (toRemove != "")
+            persistentPlayers.Remove(toRemove);
+        */
+
+        // Also do NOT shut down if you want to allow rejoin
+        /*
+        if (persistentPlayers.Count == 0 && NetworkManager.Singleton.IsServer)
+        {
+            Debug.Log("[Server] All players disconnected. Shutting down server...");
+            NetworkManager.Singleton.Shutdown();
+        }
+        */
     }
+
 
     private NetworkPlayer FindPlayerByClientId(ulong clientId)
     {
@@ -99,6 +143,36 @@ public class NetworkChessManager : NetworkBehaviour
         return null;
     }
 
+    // Send the current board to a specific client
+    private void SendBoardToReconnectingClient(ulong clientId)
+    {
+        string fenOrPgn = GameManager.Instance.SerializeGame();
+
+        var sendParams = new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams
+            {
+                TargetClientIds = new[] { clientId }
+            }
+        };
+
+        SyncBoardToOneClientRpc(fenOrPgn, sendParams);
+    }
+    
+    [ClientRpc]
+    private void SyncBoardToOneClientRpc(string serializedBoard, ClientRpcParams clientRpcParams = default)
+    {
+        Debug.Log($"[ClientRpc] loading board for reconnecting/new client.");
+
+        // If your serializer only has the start position, you must store all moves or final position
+        // Then jump to the final half-move after loading:
+        GameManager.Instance.LoadGame(serializedBoard, true);
+
+        BoardManager.Instance.EnsureOnlyPiecesOfSideAreEnabled(GameManager.Instance.SideToMove);
+    }
+
+
+    // The existing code for handling moves (unchanged)
     [ServerRpc(RequireOwnership = false)]
     public void RequestMoveServerRpc(Vector2Int from, Vector2Int to, ServerRpcParams rpcParams = default)
     {
@@ -106,7 +180,6 @@ public class NetworkChessManager : NetworkBehaviour
         NetworkPlayer player = FindPlayerByClientId(clientId);
         if (player == null) return;
 
-        // Out-of-turn => reset piece, no freeze
         if (!player.IsMyTurn())
         {
             ResetPieceClientRpc(from, clientId);
@@ -116,7 +189,6 @@ public class NetworkChessManager : NetworkBehaviour
         Square startSquare = new Square(from.x, from.y);
         Square endSquare   = new Square(to.x, to.y);
 
-        // Illegal move => reset piece, no freeze
         if (!GameManager.Instance.game.TryGetLegalMove(startSquare, endSquare, out Movement move))
         {
             ResetPieceClientRpc(from, clientId);
@@ -130,14 +202,11 @@ public class NetworkChessManager : NetworkBehaviour
             return;
         }
 
-        // Toggle turn (white -> black or black -> white)
         TurnManager.Instance.EndTurnServerRpc();
 
-        // Update board so only the next side is enabled
         Side sideToMove = GameManager.Instance.SideToMove;
         UpdateBoardStateClientRpc(sideToMove);
 
-        // Move piece visually
         UpdateBoardClientRpc(from, to);
     }
 
@@ -163,13 +232,11 @@ public class NetworkChessManager : NetworkBehaviour
     [ClientRpc]
     private void ResetPieceClientRpc(Vector2Int from, ulong targetClientId, ClientRpcParams clientRpcParams = default)
     {
-        // Only the client who made the illegal move sees this reset
         if (NetworkManager.Singleton.LocalClientId != targetClientId) return;
 
         GameObject pieceGO = BoardManager.Instance.GetPieceGOAtPosition(new Square(from.x, from.y));
         if (pieceGO != null)
         {
-            // Snap back
             pieceGO.transform.position = pieceGO.transform.parent.position;
         }
     }

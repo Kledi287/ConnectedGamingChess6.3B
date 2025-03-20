@@ -149,9 +149,21 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 	/// Loads a game from the given serialised game state string.
 	/// </summary>
 	/// <param name="serializedGame">The serialised game state string.</param>
-	public void LoadGame(string serializedGame) {
+	public void LoadGame(string serializedGame, bool jumpToLastHalfMove = true)
+	{
+		// Deserialize the entire game
 		game = serializersByType[selectedSerializationType].Deserialize(serializedGame);
+
+		// Fire the normal "NewGameStartedEvent" to rebuild the board at the base position
 		NewGameStartedEvent?.Invoke();
+
+		// Now, if we want to see the final position:
+		if (jumpToLastHalfMove && game.HalfMoveTimeline.Count > 0)
+		{
+			// Jump to the last half-move index
+			int finalIndex = game.HalfMoveTimeline.Count - 1;
+			ResetGameToHalfMoveIndex(finalIndex);
+		}
 	}
 
 	/// <summary>
