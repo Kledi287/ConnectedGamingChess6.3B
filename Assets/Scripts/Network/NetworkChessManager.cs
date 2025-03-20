@@ -26,12 +26,12 @@ public class NetworkChessManager : NetworkBehaviour
 
         NetworkManager.Singleton.OnClientDisconnectCallback += (clientId) =>
         {
-            Debug.LogError($"❌ Player {clientId} disconnected unexpectedly!");
+            Debug.LogError($"Player {clientId} disconnected unexpectedly!");
         };
 
         NetworkManager.Singleton.OnTransportFailure += () =>
         {
-            Debug.LogError("🚨 Transport Failure! Check UnityTransport configuration.");
+            Debug.LogError("Transport Failure! Check UnityTransport configuration.");
         };
     }
 
@@ -43,7 +43,7 @@ public class NetworkChessManager : NetworkBehaviour
             return;
         }
         bool started = NetworkManager.Singleton.StartHost();
-        Debug.Log($"🎯 Host Started: {started}");
+        Debug.Log($"Host Started: {started}");
     }
 
     public void StartClient()
@@ -54,7 +54,7 @@ public class NetworkChessManager : NetworkBehaviour
             return;
         }
         bool started = NetworkManager.Singleton.StartClient();
-        Debug.Log($"🎯 Client started successfully: {started}");
+        Debug.Log($"Client started successfully: {started}");
     }
 
     public override void OnNetworkSpawn()
@@ -75,7 +75,7 @@ public class NetworkChessManager : NetworkBehaviour
 
         if (string.IsNullOrEmpty(uniqueId))
         {
-            Debug.Log($"⚠ Player {clientId} connected but has no unique ID yet. Waiting for OnValueChanged...");
+            Debug.Log($"Player {clientId} connected but has no unique ID yet. Waiting for OnValueChanged...");
             // We do NOT do anything else here. We'll handle them in OnPlayerUniqueIDChanged.
             return;
         }
@@ -91,13 +91,13 @@ public class NetworkChessManager : NetworkBehaviour
     {
         if (persistentPlayers.ContainsKey(uniqueId))
         {
-            Debug.Log($"🔄 Player {clientId} (Unique ID: {uniqueId}) has reconnected.");
+            Debug.Log($"Player {clientId} (Unique ID: {uniqueId}) has reconnected.");
             SendBoardToReconnectingClient(clientId);
         }
         else
         {
             persistentPlayers[uniqueId] = clientId;
-            Debug.Log($"✅ Player {clientId} (Unique ID: {uniqueId}) connected for the first time.");
+            Debug.Log($"Player {clientId} (Unique ID: {uniqueId}) connected for the first time.");
             SendBoardToReconnectingClient(clientId);
         }
     }

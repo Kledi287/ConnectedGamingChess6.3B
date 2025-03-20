@@ -33,7 +33,5 @@ public class TurnManager : NetworkBehaviour
     public void EndTurnServerRpc()
     {
         IsWhiteTurn.Value = !IsWhiteTurn.Value;
-        // Minimal log or remove entirely:
-        Debug.Log($"🔄 Turn ended. Now {(IsWhiteTurn.Value ? "White" : "Black")}'s turn.");
     }
 }

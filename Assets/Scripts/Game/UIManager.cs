@@ -303,7 +303,6 @@ public class UIManager : MonoBehaviourSingleton<UIManager> {
 	
 	public void OnResignButtonClicked()
 	{
-		Debug.Log("[UI] Resign button clicked!");
 
 		// If there's a local player, call the server RPC
 		if (NetworkPlayer.LocalInstance != null)
