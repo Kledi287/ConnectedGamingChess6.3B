@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Unity.Netcode;
 using UnityChess;
 using UnityEngine;
 
@@ -187,26 +188,37 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 	/// <param name="move">The move to execute.</param>
 	/// <returns>True if the move was successfully executed; otherwise, false.</returns>
 	public bool TryExecuteMove(Movement move) {
-		// Attempt to execute the move within the game logic.
 		if (!game.TryExecuteMove(move)) {
 			return false;
 		}
 
-		// Retrieve the latest half-move from the timeline.
 		HalfMoveTimeline.TryGetCurrent(out HalfMove latestHalfMove);
-		
-		// If the latest move resulted in checkmate or stalemate, disable further moves.
-		if (latestHalfMove.CausedCheckmate || latestHalfMove.CausedStalemate) {
+		if (latestHalfMove.CausedCheckmate) {
 			BoardManager.Instance.SetActiveAllPieces(false);
 			GameEndedEvent?.Invoke();
-		} else {
+
+			// NEW: Let the server announce "checkmate" to all
+			if (NetworkManager.Singleton.IsServer) {
+				// The side that did the move is latestHalfMove.Piece.Owner
+				string winningSide = latestHalfMove.Piece.Owner.ToString();
+				NetworkChessManager.Instance.AnnounceOutcomeServerRpc($"{winningSide} wins by checkmate!");
+			}
+		}
+		else if (latestHalfMove.CausedStalemate) {
+			BoardManager.Instance.SetActiveAllPieces(false);
+			GameEndedEvent?.Invoke();
+
+			// NEW: Let the server announce "stalemate"
+			if (NetworkManager.Singleton.IsServer) {
+				NetworkChessManager.Instance.AnnounceOutcomeServerRpc("Game drawn by stalemate!");
+			}
+		}
+		else {
 			// Otherwise, ensure that only the pieces of the side to move are enabled.
 			BoardManager.Instance.EnsureOnlyPiecesOfSideAreEnabled(SideToMove);
 		}
 
-		// Signal that a move has been executed.
 		MoveExecutedEvent?.Invoke();
-
 		return true;
 	}
 	

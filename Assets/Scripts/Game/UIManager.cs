@@ -37,6 +37,8 @@ public class UIManager : MonoBehaviourSingleton<UIManager> {
 	// Darkening factor for alternate move history row colours (range -0.25 to 0.25).
 	[SerializeField, Range(-0.25f, 0.25f)] private float moveHistoryAlternateColorDarkenAmount = 0f;
 	
+	[SerializeField] private Button resignButton;
+	
 	// Timeline to keep track of the full move UI elements in sequence.
 	private Timeline<FullMoveUI> moveUITimeline;
 	// Computed button colour based on the background colour and darkening factor.
@@ -292,4 +294,34 @@ public class UIManager : MonoBehaviourSingleton<UIManager> {
 	/// Updates the game string input field with the current serialized game state.
 	/// </summary>
 	private void UpdateGameStringInputField() => GameStringInputField.text = GameManager.Instance.SerializeGame();
+	
+	public void ShowOutcomeText(string message)
+	{
+		resultText.gameObject.SetActive(true);
+		resultText.text = message;
+	}
+	
+	public void OnResignButtonClicked()
+	{
+		Debug.Log("[UI] Resign button clicked!");
+
+		// If there's a local player, call the server RPC
+		if (NetworkPlayer.LocalInstance != null)
+		{
+			ulong myClientId = NetworkPlayer.LocalInstance.OwnerClientId;
+			NetworkChessManager.Instance.ResignServerRpc(myClientId);
+		}
+		else
+		{
+			Debug.LogWarning("[UI] No LocalInstance of NetworkPlayer to resign.");
+		}
+	}
+	
+	public void DisableResignButton()
+	{
+		if (resignButton != null)
+		{
+			resignButton.interactable = false;
+		}
+	}
 }

@@ -209,7 +209,36 @@ public class NetworkChessManager : NetworkBehaviour
 
         UpdateBoardClientRpc(from, to);
     }
+    
+    [ServerRpc(RequireOwnership = false)]
+    public void ResignServerRpc(ulong resigningClientId)
+    {
+        NetworkPlayer player = FindPlayerByClientId(resigningClientId);
+        if (player == null) return;
 
+        bool isWhite = player.IsWhite.Value;
+        string resigningSide = isWhite ? "White" : "Black";
+        string winningSide = isWhite ? "Black" : "White";
+
+        AnnounceOutcomeServerRpc($"{winningSide} wins by resignation! ({resigningSide} resigned)");
+    }
+    
+    [ServerRpc(RequireOwnership = false)]
+    public void AnnounceOutcomeServerRpc(string outcomeMessage)
+    {
+        // This calls a ClientRpc to show the outcome
+        AnnounceOutcomeClientRpc(outcomeMessage);
+    }
+    
+    [ClientRpc]
+    private void AnnounceOutcomeClientRpc(string outcomeMessage)
+    {
+        Debug.Log($"[ClientRpc] AnnounceOutcome => {outcomeMessage}");
+        UIManager.Instance.ShowOutcomeText(outcomeMessage);
+        BoardManager.Instance.SetActiveAllPieces(false);
+        UIManager.Instance.DisableResignButton();
+    }
+  
     [ClientRpc]
     private void UpdateBoardClientRpc(Vector2Int from, Vector2Int to)
     {
