@@ -17,9 +17,14 @@ public class CurrencyManager : MonoBehaviour
         else Destroy(gameObject);
     }
     
+    private void Start()
+    {
+        playerCoins = PlayerPrefs.GetInt("PlayerCoins", 1000);
+    }
+    
     void Update()
     {
-        currencyText.text = "" + CurrencyManager.Instance.playerCoins;
+        currencyText.text = playerCoins.ToString();
     }
 
     /// <summary>
@@ -32,6 +37,10 @@ public class CurrencyManager : MonoBehaviour
         {
             playerCoins -= amount;
             Debug.Log($"[CurrencyManager] Spent {amount} coins. Remaining: {playerCoins}");
+
+            // Save after spending
+            PlayerPrefs.SetInt("PlayerCoins", playerCoins);
+            PlayerPrefs.Save();
             return true;
         }
         else
@@ -40,6 +49,5 @@ public class CurrencyManager : MonoBehaviour
             return false;
         }
     }
-    
 }
 

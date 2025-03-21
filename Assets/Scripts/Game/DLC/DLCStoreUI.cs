@@ -11,18 +11,23 @@ public class DLCStoreUI : MonoBehaviour
     
     public Button greenButton;
     public TMP_Text greenButtonText;
+    public TMP_Text greenCostText;
     
     public Button blueButton;
     public TMP_Text blueButtonText;
+    public TMP_Text blueCostText;
     
     public Button yellowButton;
     public TMP_Text yellowButtonText;
+    public TMP_Text yellowCostText;
     
     public Button brownButton;
     public TMP_Text brownButtonText;
+    public TMP_Text brownCostText;
     
     public Button redButton;
     public TMP_Text redButtonText;
+    public TMP_Text redCostText;
     
     public static DLCStoreUI Instance;
     public PurchaseConfirmationUI purchaseConfirmationUI;
@@ -42,6 +47,8 @@ public class DLCStoreUI : MonoBehaviour
         {
             closeButton.onClick.AddListener(OnCloseButtonClicked);
         }
+        LoadOwnedSkins();
+        UpdateButtonLabels();
     }
 
     public void OpenStore()
@@ -53,6 +60,26 @@ public class DLCStoreUI : MonoBehaviour
     {
         storePanel.SetActive(false);
     }
+    
+    private void LoadOwnedSkins()
+    {
+        string json = PlayerPrefs.GetString("OwnedSkins", "");
+        if (!string.IsNullOrEmpty(json))
+        {
+            OwnedSkinsData data = JsonUtility.FromJson<OwnedSkinsData>(json);
+            // Clear or create the dictionary
+            ownedSkins = new Dictionary<string, bool>();
+            foreach (var entry in data.entries)
+            {
+                ownedSkins[entry.skinPath] = entry.owned;
+            }
+        }
+        else
+        {
+            // If no data found, do nothing (ownedSkins remains empty).
+        }
+        UpdateButtonLabels();
+    }
 
     public async void OnBuySkin(string skinPath, List<GameObject> allMyPieces)
     {
@@ -61,7 +88,6 @@ public class DLCStoreUI : MonoBehaviour
         Texture2D downloadedTex = await DLCManager.Instance.DownloadSkinAsync(skinPath);
         if (downloadedTex != null)
         {
-            // Apply to all the user's pieces
             DLCManager.Instance.ApplySkinToAllPieces(allMyPieces, downloadedTex);
 
             Debug.Log("[DLCStoreUI] Skin applied to all pieces successfully!");
@@ -76,6 +102,25 @@ public class DLCStoreUI : MonoBehaviour
     {
         ownedSkins[skinPath] = owned;
         UpdateButtonLabels();
+        SaveOwnedSkins();
+    }
+    
+    private void SaveOwnedSkins()
+    {
+        OwnedSkinsData data = new OwnedSkinsData();
+        data.entries = new List<OwnedSkinEntry>();
+        foreach (var kvp in ownedSkins)
+        {
+            var entry = new OwnedSkinEntry();
+            entry.skinPath = kvp.Key;
+            entry.owned    = kvp.Value;
+            data.entries.Add(entry);
+        }
+
+        string json = JsonUtility.ToJson(data);
+        PlayerPrefs.SetString("OwnedSkins", json);
+        PlayerPrefs.Save();
+        Debug.Log("[DLCStoreUI] Owned skins saved: " + json);
     }
     
     private bool IsSkinOwned(string skinPath)
@@ -86,29 +131,54 @@ public class DLCStoreUI : MonoBehaviour
     private void UpdateButtonLabels()
     {
         if (IsSkinOwned("chessSkins/green.png"))
+        {
             greenButtonText.text = "USE";
+            greenCostText.text = "Purchased!";
+        }
         else
+        {
             greenButtonText.text = "BUY";
+        }
 
         if (IsSkinOwned("chessSkins/brown.png"))
+        {
             brownButtonText.text = "USE";
+            brownCostText.text = "Purchased!";
+        }
         else
+        {
             brownButtonText.text = "BUY";
-        
+        }
+
         if (IsSkinOwned("chessSkins/red.png"))
+        {
             redButtonText.text = "USE";
+            redCostText.text = "Purchased!";
+        }
         else
+        {
             redButtonText.text = "BUY";
-        
+        }
+
         if (IsSkinOwned("chessSkins/blue.png"))
+        {
             blueButtonText.text = "USE";
+            blueCostText.text = "Purchased!";
+        }
         else
+        {
             blueButtonText.text = "BUY";
-        
+        }
+
         if (IsSkinOwned("chessSkins/yellow.png"))
+        {
             yellowButtonText.text = "USE";
+            yellowCostText.text = "Purchased!";
+        }
         else
+        {
             yellowButtonText.text = "BUY";
+        }
     }
     
     public void OnGreenSkinButtonClicked()
@@ -184,5 +254,18 @@ public class DLCStoreUI : MonoBehaviour
         {
             purchaseConfirmationUI.Show(cost, "chessSkins/yellow.png", myPieces);
         }
+    }
+    
+    [System.Serializable]
+    public class OwnedSkinsData
+    {
+        public List<OwnedSkinEntry> entries;
+    }
+
+    [System.Serializable]
+    public class OwnedSkinEntry
+    {
+        public string skinPath;
+        public bool owned;
     }
 }
