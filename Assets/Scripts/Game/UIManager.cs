@@ -39,6 +39,8 @@ public class UIManager : MonoBehaviourSingleton<UIManager> {
 	
 	[SerializeField] private Button resignButton;
 	
+	[SerializeField] private DLCStoreUI storeUI;
+	
 	// Timeline to keep track of the full move UI elements in sequence.
 	private Timeline<FullMoveUI> moveUITimeline;
 	// Computed button colour based on the background colour and darkening factor.
@@ -323,4 +325,10 @@ public class UIManager : MonoBehaviourSingleton<UIManager> {
 			resignButton.interactable = false;
 		}
 	}
+	
+	public void OnShopButtonClicked()
+	{
+		storeUI.OpenStore();
+	}
+	
 }

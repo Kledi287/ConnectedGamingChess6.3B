@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "782253106516",
+    "project_id": "cg-chess-63b",
+    "storage_bucket": "cg-chess-63b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:782253106516:android:728cc17bab26b2ff7a14c1",
+        "android_client_info": {
+          "package_name": "com.chess.cg63b"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCAFsGMXITXk2Xri0_gDRotHQfU3UASR5I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
