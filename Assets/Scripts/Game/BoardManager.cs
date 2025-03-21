@@ -150,6 +150,26 @@ public class BoardManager : MonoBehaviourSingleton<BoardManager>
             DestroyImmediate(vp.gameObject);
         }
     }
+    
+    public List<GameObject> GetAllWhitePieces()
+    {
+        List<GameObject> whitePieces = new List<GameObject>();
+
+        // We already have VisualPiece components for each piece
+        VisualPiece[] allVisualPieces = GetComponentsInChildren<VisualPiece>(true);
+
+        foreach (VisualPiece vp in allVisualPieces)
+        {
+            // If you define "Side.White" for White pieces
+            if (vp.PieceColor == UnityChess.Side.White)
+            {
+                whitePieces.Add(vp.gameObject);
+            }
+        }
+
+        return whitePieces;
+    }
+
 
     public GameObject GetSquareGOByPosition(Square position) =>
         Array.Find(allSquaresGO, go => go.name == SquareToString(position));

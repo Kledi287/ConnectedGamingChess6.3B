@@ -28,24 +28,52 @@ public class DLCStoreUI : MonoBehaviour
         storePanel.SetActive(false);
     }
 
-    // Suppose this is called when user clicks "Buy" or "Use" on a specific skin
-    // skinPath => the path in Firebase Storage, e.g. "chessSkins/BlackKnight.png"
-    // pieceGO => the 3D piece you want to update
-    public async void OnBuySkin(string skinPath, GameObject pieceGO)
+    public async void OnBuySkin(string skinPath, List<GameObject> allMyPieces)
     {
         Debug.Log($"[DLCStoreUI] Buying/downloading skin: {skinPath}");
-        
+    
         Texture2D downloadedTex = await DLCManager.Instance.DownloadSkinAsync(skinPath);
         if (downloadedTex != null)
         {
-            // Apply to the piece's material
-            DLCManager.Instance.ApplySkinToPiece(pieceGO, downloadedTex);
+            // Apply to all the user's pieces
+            DLCManager.Instance.ApplySkinToAllPieces(allMyPieces, downloadedTex);
 
-            Debug.Log("[DLCStoreUI] Skin applied successfully!");
+            Debug.Log("[DLCStoreUI] Skin applied to all pieces successfully!");
         }
         else
         {
             Debug.LogError("[DLCStoreUI] Failed to download or apply skin.");
         }
     }
+    
+    public void OnGreenSkinButtonClicked()
+    {
+        var myPieces = BoardManager.Instance.GetAllWhitePieces(); 
+        OnBuySkin("chessSkins/green.png", myPieces);
+    }
+    
+    public void OnBlueSkinButtonClicked()
+    {
+        var myPieces = BoardManager.Instance.GetAllWhitePieces();
+        OnBuySkin("chessSkins/blue.png", myPieces);
+    }
+
+    public void OnBrownSkinButtonClicked()
+    {
+        var myPieces = BoardManager.Instance.GetAllWhitePieces();
+        OnBuySkin("chessSkins/brown.png", myPieces);
+    }
+    
+    public void OnRedSkinButtonClicked()
+    {
+        var myPieces = BoardManager.Instance.GetAllWhitePieces();
+        OnBuySkin("chessSkins/red.png", myPieces);
+    }
+
+    public void OnYellowSkinButtonClicked()
+    {
+        var myPieces = BoardManager.Instance.GetAllWhitePieces();
+        OnBuySkin("chessSkins/yellow.png", myPieces);
+    }
+    
 }

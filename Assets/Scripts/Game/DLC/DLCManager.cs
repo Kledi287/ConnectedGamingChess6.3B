@@ -62,4 +62,13 @@ public class DLCManager : MonoBehaviour
             Debug.LogWarning($"[DLCManager] No Renderer found on '{pieceGO.name}'!");
         }
     }
+    
+    public void ApplySkinToAllPieces(List<GameObject> pieces, Texture2D texture)
+    {
+        foreach (GameObject pieceGO in pieces)
+        {
+            ApplySkinToPiece(pieceGO, texture);
+        }
+    }
+
 }
