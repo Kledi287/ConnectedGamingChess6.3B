@@ -1,43 +1,48 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
+using Game.DLC;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class PurchaseConfirmationUI : MonoBehaviour
+namespace Game.DLC
 {
-    [SerializeField] private GameObject panel;
-    private int cost;
-    private string skinPath;
-    private List<GameObject> myPieces;
-
-    public void Show(int cost, string skinPath, List<GameObject> myPieces)
+    public class PurchaseConfirmationUI : MonoBehaviour
     {
-        this.cost = cost;
-        this.skinPath = skinPath;
-        this.myPieces = myPieces;
-        panel.SetActive(true);
-    }
+        [SerializeField] private GameObject panel;
+        private int cost;
+        private string skinPath;
+        private List<GameObject> myPieces;
 
-    public void OnConfirmButton()
-    {
-        bool canPurchase = CurrencyManager.Instance.TrySpendCoins(cost);
-        if (!canPurchase)
+        public void Show(int cost, string skinPath, List<GameObject> myPieces)
         {
-            Debug.LogWarning("Not enough coins!");
+            this.cost = cost;
+            this.skinPath = skinPath;
+            this.myPieces = myPieces;
+            panel.SetActive(true);
         }
-        else
+
+        public void OnConfirmButton()
         {
-            DLCStoreUI.Instance.SetSkinOwned(skinPath, true);
+            bool canPurchase = CurrencyManager.Instance.TrySpendCoins(cost);
+            if (!canPurchase)
+            {
+                Debug.LogWarning("Not enough coins!");
+            }
+            else
+            {
+                DLCStoreUI.Instance.SetSkinOwned(skinPath, true);
             
-            DLCStoreUI.Instance.OnBuySkin(skinPath, myPieces);
+                DLCStoreUI.Instance.OnBuySkin(skinPath, myPieces);
+            }
+            panel.SetActive(false);
         }
-        panel.SetActive(false);
-    }
     
-    public void OnCancelButton()
-    {
-        panel.SetActive(false);
+        public void OnCancelButton()
+        {
+            panel.SetActive(false);
+        }
     }
 }
+
 
 

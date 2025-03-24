@@ -169,7 +169,25 @@ public class BoardManager : MonoBehaviourSingleton<BoardManager>
 
         return whitePieces;
     }
-
+    
+    public List<GameObject> GetAllBlackPieces()
+    {
+        List<GameObject> blackPieces = new List<GameObject>();
+    
+        // Use GetComponentsInChildren instead of GetComponentInChildren
+        VisualPiece[] allVisualPieces = GetComponentsInChildren<VisualPiece>(true);
+    
+        foreach (VisualPiece vp in allVisualPieces)
+        {
+            if (vp.PieceColor == UnityChess.Side.Black)
+            {
+                blackPieces.Add(vp.gameObject);
+            }
+        }
+    
+        Debug.Log($"[BoardManager] Found {blackPieces.Count} black pieces");
+        return blackPieces;
+    }
 
     public GameObject GetSquareGOByPosition(Square position) =>
         Array.Find(allSquaresGO, go => go.name == SquareToString(position));

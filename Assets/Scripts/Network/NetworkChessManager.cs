@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using Game.DLC;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
@@ -11,6 +13,9 @@ public class NetworkChessManager : NetworkBehaviour
 
     [SerializeField] private Button hostButton; 
     [SerializeField] private Button joinButton; 
+    
+    private string currentWhiteSkin = "";
+    private string currentBlackSkin = "";
 
     private Dictionary<string, ulong> persistentPlayers = new Dictionary<string, ulong>();
 
@@ -33,6 +38,20 @@ public class NetworkChessManager : NetworkBehaviour
         {
             Debug.LogError("Transport Failure! Check UnityTransport configuration.");
         };
+        
+        if (!PlayerPrefs.HasKey("AutoApplySkins"))
+        {
+            PlayerPrefs.SetInt("AutoApplySkins", 0);
+            PlayerPrefs.Save();
+        }
+        
+        if (PlayerPrefs.HasKey("CurrentWhiteSkin") || PlayerPrefs.HasKey("CurrentBlackSkin"))
+        {
+            Debug.Log("[NetworkChessManager] Clearing previously saved skins to avoid automatic application");
+            PlayerPrefs.DeleteKey("CurrentWhiteSkin");
+            PlayerPrefs.DeleteKey("CurrentBlackSkin");
+            PlayerPrefs.Save();
+        }
     }
 
     public void StartHost()
@@ -63,6 +82,11 @@ public class NetworkChessManager : NetworkBehaviour
         {
             NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
             NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
+            
+            if (PlayerPrefs.GetInt("AutoApplySkins", 0) == 1)
+            {
+                LoadSavedSkins();
+            }
         }
     }
 
@@ -156,7 +180,19 @@ public class NetworkChessManager : NetworkBehaviour
             }
         };
 
+        // Send the board state
         SyncBoardToOneClientRpc(fenOrPgn, sendParams);
+    
+        // Send current skin states if they exist
+        if (!string.IsNullOrEmpty(currentWhiteSkin))
+        {
+            SyncSkinClientRpc(true, currentWhiteSkin, sendParams);
+        }
+    
+        if (!string.IsNullOrEmpty(currentBlackSkin))
+        {
+            SyncSkinClientRpc(false, currentBlackSkin, sendParams);
+        }
     }
     
     [ClientRpc]
@@ -170,8 +206,91 @@ public class NetworkChessManager : NetworkBehaviour
 
         BoardManager.Instance.EnsureOnlyPiecesOfSideAreEnabled(GameManager.Instance.SideToMove);
     }
-
-
+    
+    [ServerRpc(RequireOwnership = false)]
+    public void SyncSkinServerRpc(bool isWhite, string skinPath, ServerRpcParams rpcParams = default)
+    {
+        try
+        {
+            ulong clientId = rpcParams.Receive.SenderClientId;
+        
+            // IMPORTANT FIX: Don't check if player.IsWhite.Value matches isWhite
+            // The player might be applying skins to either white or black pieces
+            // regardless of which side they're playing as
+            NetworkPlayer player = FindPlayerByClientId(clientId);
+            if (player == null)
+            {
+                Debug.LogWarning($"[Server] Player {clientId} not found when setting skin");
+                return;
+            }
+        
+            // Store the skin path for this side based on the piece color (isWhite)
+            if (isWhite)
+                currentWhiteSkin = skinPath;
+            else
+                currentBlackSkin = skinPath;
+        
+            // Save the skins to PlayerPrefs for persistence
+            SaveCurrentSkins();
+        
+            Debug.Log($"[Server] Player {clientId} applied skin: {skinPath} for {(isWhite ? "white" : "black")} pieces");
+        
+            // Broadcast to all clients
+            SyncSkinClientRpc(isWhite, skinPath);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[Server] Error in SyncSkinServerRpc: {ex.Message}\n{ex.StackTrace}");
+        }
+    }
+    
+    [ClientRpc]
+    public void SyncSkinClientRpc(bool isWhite, string skinPath, ClientRpcParams clientRpcParams = default)
+    {
+        Debug.Log($"[Client] Received skin update: {skinPath} for {(isWhite ? "white" : "black")} pieces");
+        
+        Side pieceSide = isWhite ? UnityChess.Side.White : UnityChess.Side.Black;
+        
+        List<GameObject> pieces = new List<GameObject>();
+        VisualPiece[] allVisualPieces = BoardManager.Instance.GetComponentsInChildren<VisualPiece>(true);
+        
+        foreach (VisualPiece vp in allVisualPieces)
+        {
+            if (vp.PieceColor == pieceSide)
+            {
+                pieces.Add(vp.gameObject);
+            }
+        }
+        
+        bool isLocalPlayerSkin = NetworkPlayer.LocalInstance != null && 
+                                 NetworkPlayer.LocalInstance.IsWhite.Value == isWhite && 
+                                 NetworkPlayer.LocalInstance.HasRecentlyChangedSkin && 
+                                 NetworkPlayer.LocalInstance.LastChangedSkinPath == skinPath;
+    
+        if (isLocalPlayerSkin)
+        {
+            NetworkPlayer.LocalInstance.HasRecentlyChangedSkin = false;
+        }
+        else
+        {
+            ApplySkinToSide(skinPath, pieces);
+        }
+    }
+    
+    private async void ApplySkinToSide(string skinPath, List<GameObject> pieces)
+    {
+        Texture2D downloadedTex = await DLCManager.Instance.DownloadSkinAsync(skinPath);
+        if (downloadedTex != null)
+        {
+            // Since we're already in Unity's main thread after the await, we can directly apply skins
+            DLCManager.Instance.ApplySkinToAllPieces(pieces, downloadedTex);
+        }
+        else
+        {
+            Debug.LogError($"[NetworkChessManager] Failed to download skin: {skinPath}");
+        }
+    }
+    
     // The existing code for handling moves (unchanged)
     [ServerRpc(RequireOwnership = false)]
     public void RequestMoveServerRpc(Vector2Int from, Vector2Int to, ServerRpcParams rpcParams = default)
@@ -249,6 +368,27 @@ public class NetworkChessManager : NetworkBehaviour
             Transform squareTransform = BoardManager.Instance.GetSquareGOByPosition(new Square(to.x, to.y)).transform;
             pieceGO.transform.parent = squareTransform;
             pieceGO.transform.localPosition = Vector3.zero;
+            
+            VisualPiece visualPiece = pieceGO.GetComponent<VisualPiece>();
+            if (visualPiece != null)
+            {
+                bool isWhite = visualPiece.PieceColor == UnityChess.Side.White;
+                string currentSkin = isWhite ? currentWhiteSkin : currentBlackSkin;
+                
+                if (!string.IsNullOrEmpty(currentSkin))
+                {
+                    ReapplySkinAfterMove(pieceGO, currentSkin);
+                }
+            }
+        }
+    }
+    
+    private async void ReapplySkinAfterMove(GameObject pieceGO, string skinPath)
+    {
+        Texture2D downloadedTex = await DLCManager.Instance.DownloadSkinAsync(skinPath);
+        if (downloadedTex != null)
+        {
+            DLCManager.Instance.ApplySkinToPiece(pieceGO, downloadedTex);
         }
     }
 
@@ -267,6 +407,67 @@ public class NetworkChessManager : NetworkBehaviour
         if (pieceGO != null)
         {
             pieceGO.transform.position = pieceGO.transform.parent.position;
+        }
+    }
+    
+    private void SaveCurrentSkins()
+    {
+        if (!string.IsNullOrEmpty(currentWhiteSkin))
+        {
+            PlayerPrefs.SetString("CurrentWhiteSkin", currentWhiteSkin);
+        }
+    
+        if (!string.IsNullOrEmpty(currentBlackSkin))
+        {
+            PlayerPrefs.SetString("CurrentBlackSkin", currentBlackSkin);
+        }
+    
+        PlayerPrefs.Save();
+    }
+    
+    private void LoadSavedSkins()
+    {
+        // Load saved skins but only if they exist and AutoApplySkins is enabled
+        if (PlayerPrefs.GetInt("AutoApplySkins", 0) != 1)
+        {
+            Debug.Log("[NetworkChessManager] Skipping automatic skin loading (disabled in preferences)");
+            return;
+        }
+
+        currentWhiteSkin = PlayerPrefs.GetString("CurrentWhiteSkin", "");
+        currentBlackSkin = PlayerPrefs.GetString("CurrentBlackSkin", "");
+    
+        Debug.Log($"[NetworkChessManager] Loaded saved skins - White: {currentWhiteSkin}, Black: {currentBlackSkin}");
+    
+        // Only apply if non-empty and if we're actually in a game
+        if (!string.IsNullOrEmpty(currentWhiteSkin) && BoardManager.Instance != null)
+        {
+            Debug.Log($"[NetworkChessManager] Applying saved white skin: {currentWhiteSkin}");
+            ApplyLoadedSkin(true, currentWhiteSkin);
+        }
+    
+        if (!string.IsNullOrEmpty(currentBlackSkin) && BoardManager.Instance != null)
+        {
+            Debug.Log($"[NetworkChessManager] Applying saved black skin: {currentBlackSkin}");
+            ApplyLoadedSkin(false, currentBlackSkin);
+        }
+    }
+    
+    private void ApplyLoadedSkin(bool isWhite, string skinPath)
+    {
+        // Only apply on the server or in single player mode
+        if (!IsServer && !NetworkManager.Singleton.IsHost) return;
+    
+        List<GameObject> pieces = isWhite ? 
+            BoardManager.Instance.GetAllWhitePieces() : 
+            BoardManager.Instance.GetAllBlackPieces();
+    
+        ApplySkinToSide(skinPath, pieces);
+    
+        // If we're in multiplayer, also broadcast to clients
+        if (NetworkManager.Singleton.IsServer)
+        {
+            SyncSkinClientRpc(isWhite, skinPath);
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -92,7 +92,7 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 	// Reference to the debug utility for the chess engine.
 	[SerializeField] private UnityChessDebug unityChessDebug;
 	// The current game instance.
-	public Game game;
+	public UnityChess.Game game;
 	// Serializers for game state (FEN and PGN formats).
 	private FENSerializer fenSerializer;
 	private PGNSerializer pgnSerializer;
@@ -132,7 +132,7 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 	/// Starts a new game by creating a new game instance and invoking the NewGameStartedEvent.
 	/// </summary>
 	public async void StartNewGame() {
-		game = new Game();
+		game = new UnityChess.Game();
 		NewGameStartedEvent?.Invoke();
 	}
 

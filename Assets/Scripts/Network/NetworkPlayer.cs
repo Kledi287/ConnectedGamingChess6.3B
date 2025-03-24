@@ -6,6 +6,9 @@ using System.Collections;
 public class NetworkPlayer : NetworkBehaviour
 {
     public static NetworkPlayer LocalInstance;
+    
+    public bool HasRecentlyChangedSkin { get; set; } = false;
+    public string LastChangedSkinPath { get; set; } = "";
 
     // We'll store the local user ID in PlayerPrefs so it persists across Play sessions.
     private static string localUserId;
@@ -89,5 +92,11 @@ public class NetworkPlayer : NetworkBehaviour
     public bool IsMyTurn()
     {
         return TurnManager.Instance.CanMove(IsWhite.Value);
+    }
+    
+    public void MarkSkinChanged(string skinPath)
+    {
+        HasRecentlyChangedSkin = true;
+        LastChangedSkinPath = skinPath;
     }
 }
