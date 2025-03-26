@@ -37,6 +37,8 @@ namespace Game.DLC
         public static DLCStoreUI Instance;
         public PurchaseConfirmationUI purchaseConfirmationUI;
         
+        public static event System.Action<string, bool> OnSkinApplied;
+        
         private Dictionary<string, bool> ownedSkins = new Dictionary<string, bool>();
         
         public void ToggleAutoApplySkins(bool enable)
@@ -72,83 +74,76 @@ namespace Game.DLC
         {
             storePanel.SetActive(false);
         }
-        
-        private void LoadOwnedSkins()
+
+        public void LoadOwnedSkins()
         {
             string json = PlayerPrefs.GetString("OwnedSkins", "");
             if (!string.IsNullOrEmpty(json))
             {
                 OwnedSkinsData data = JsonUtility.FromJson<OwnedSkinsData>(json);
-                // Clear or create the dictionary
                 ownedSkins = new Dictionary<string, bool>();
                 foreach (var entry in data.entries)
                 {
                     ownedSkins[entry.skinPath] = entry.owned;
                 }
             }
-            else
-            {
-                // If no data found, do nothing (ownedSkins remains empty).
-            }
             UpdateButtonLabels();
         }
 
         public async void OnBuySkin(string skinPath, List<GameObject> allMyPieces)
-        {
-            try
             {
-                Debug.Log($"[DLCStoreUI] Buying/downloading skin: {skinPath}");
-                
-                if (allMyPieces == null || allMyPieces.Count == 0)
+                try
                 {
-                    Debug.LogError("[DLCStoreUI] No pieces provided to apply skin to!");
-                    return;
-                }
-                
-                // Get the side of pieces we're applying to
-                VisualPiece samplePiece = allMyPieces[0].GetComponent<VisualPiece>();
-                Side pieceSide = samplePiece != null ? samplePiece.PieceColor : Side.None;
-                Debug.Log($"[DLCStoreUI] Applying skin to {allMyPieces.Count} pieces of side {pieceSide}");
-                
-                Texture2D downloadedTex = await DLCManager.Instance.DownloadSkinAsync(skinPath);
-                if (downloadedTex != null)
-                {
-                    DLCManager.Instance.ApplySkinToAllPieces(allMyPieces, downloadedTex);
+                    Debug.Log($"[DLCStoreUI] Buying/downloading skin: {skinPath}");
                     
-                    // Always sync in multiplayer mode - use the piece side (not player side)
-                    if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsClient)
+                    if (allMyPieces == null || allMyPieces.Count == 0)
                     {
-                        NetworkPlayer localPlayer = NetworkPlayer.LocalInstance;
-                        if (localPlayer != null)
-                        {
-                            // Critical fix: use the piece color, not the player's IsWhite value
-                            bool syncIsWhite = (pieceSide == Side.White);
-                            
-                            // Mark that we just changed our skin (to avoid downloading it again)
-                            localPlayer.MarkSkinChanged(skinPath);
-                            
-                            // Tell the server about our skin change
-                            NetworkChessManager.Instance.SyncSkinServerRpc(syncIsWhite, skinPath);
-                            Debug.Log($"[DLCStoreUI] Notified server about skin change to: {skinPath} for {(syncIsWhite ? "white" : "black")} pieces");
-                        }
-                        else
-                        {
-                            Debug.LogWarning("[DLCStoreUI] Cannot sync skin - LocalInstance is null");
-                        }
+                        Debug.LogError("[DLCStoreUI] No pieces provided to apply skin to!");
+                        return;
                     }
                     
-                    Debug.Log("[DLCStoreUI] Skin applied to all pieces successfully!");
+                    VisualPiece samplePiece = allMyPieces[0].GetComponent<VisualPiece>();
+                    Side pieceSide = samplePiece != null ? samplePiece.PieceColor : Side.None;
+                    Debug.Log($"[DLCStoreUI] Applying skin to {allMyPieces.Count} pieces of side {pieceSide}");
+                    
+                    Texture2D downloadedTex = await DLCManager.Instance.DownloadSkinAsync(skinPath);
+                    if (downloadedTex != null)
+                    {
+                        DLCManager.Instance.ApplySkinToAllPieces(allMyPieces, downloadedTex);
+                        
+                        bool isWhitePieces = (pieceSide == Side.White);
+                        OnSkinApplied?.Invoke(skinPath, isWhitePieces);
+                        
+                        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsClient)
+                        {
+                            NetworkPlayer localPlayer = NetworkPlayer.LocalInstance;
+                            if (localPlayer != null)
+                            {
+                                bool syncIsWhite = (pieceSide == Side.White);
+                                
+                                localPlayer.MarkSkinChanged(skinPath);
+                                
+                                NetworkChessManager.Instance.SyncSkinServerRpc(syncIsWhite, skinPath);
+                                Debug.Log($"[DLCStoreUI] Notified server about skin change to: {skinPath} for {(syncIsWhite ? "white" : "black")} pieces");
+                            }
+                            else
+                            {
+                                Debug.LogWarning("[DLCStoreUI] Cannot sync skin - LocalInstance is null");
+                            }
+                        }
+                        
+                        Debug.Log("[DLCStoreUI] Skin applied to all pieces successfully!");
+                    }
+                    else
+                    {
+                        Debug.LogError("[DLCStoreUI] Failed to download or apply skin.");
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    Debug.LogError("[DLCStoreUI] Failed to download or apply skin.");
+                    Debug.LogError($"[DLCStoreUI] Error in OnBuySkin: {ex.Message}\n{ex.StackTrace}");
                 }
             }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[DLCStoreUI] Error in OnBuySkin: {ex.Message}\n{ex.StackTrace}");
-            }
-        }
         
         public void SetSkinOwned(string skinPath, bool owned)
         {
@@ -237,7 +232,6 @@ namespace Game.DLC
         {
             List<GameObject> myPieces;
             
-            // Get the correct pieces based on player's side
             if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsClient && NetworkPlayer.LocalInstance != null)
             {
                 bool isWhite = NetworkPlayer.LocalInstance.IsWhite.Value;
@@ -249,7 +243,6 @@ namespace Game.DLC
             }
             else
             {
-                // Default to white pieces in single player
                 myPieces = BoardManager.Instance.GetAllWhitePieces();
             }
             
@@ -269,7 +262,6 @@ namespace Game.DLC
         {
             List<GameObject> myPieces;
             
-            // Get the correct pieces based on player's side
             if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsClient && NetworkPlayer.LocalInstance != null)
             {
                 bool isWhite = NetworkPlayer.LocalInstance.IsWhite.Value;
@@ -281,7 +273,6 @@ namespace Game.DLC
             }
             else
             {
-                // Default to white pieces in single player
                 myPieces = BoardManager.Instance.GetAllWhitePieces();
             }
             
@@ -300,8 +291,7 @@ namespace Game.DLC
         public void OnBrownSkinButtonClicked()
         {
             List<GameObject> myPieces;
-            
-            // Get the correct pieces based on player's side
+
             if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsClient && NetworkPlayer.LocalInstance != null)
             {
                 bool isWhite = NetworkPlayer.LocalInstance.IsWhite.Value;
@@ -313,7 +303,6 @@ namespace Game.DLC
             }
             else
             {
-                // Default to white pieces in single player
                 myPieces = BoardManager.Instance.GetAllWhitePieces();
             }
             
@@ -333,7 +322,6 @@ namespace Game.DLC
         {
             List<GameObject> myPieces;
             
-            // Get the correct pieces based on player's side
             if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsClient && NetworkPlayer.LocalInstance != null)
             {
                 bool isWhite = NetworkPlayer.LocalInstance.IsWhite.Value;
@@ -345,7 +333,6 @@ namespace Game.DLC
             }
             else
             {
-                // Default to white pieces in single player
                 myPieces = BoardManager.Instance.GetAllWhitePieces();
             }
             
@@ -365,7 +352,6 @@ namespace Game.DLC
         {
             List<GameObject> myPieces;
             
-            // Get the correct pieces based on player's side
             if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsClient && NetworkPlayer.LocalInstance != null)
             {
                 bool isWhite = NetworkPlayer.LocalInstance.IsWhite.Value;
@@ -377,7 +363,6 @@ namespace Game.DLC
             }
             else
             {
-                // Default to white pieces in single player
                 myPieces = BoardManager.Instance.GetAllWhitePieces();
             }
             

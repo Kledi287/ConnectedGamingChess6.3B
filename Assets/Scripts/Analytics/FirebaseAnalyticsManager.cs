@@ -38,13 +38,12 @@ namespace Game.Analytics
                 var dependencyStatus = task.Result;
                 if (dependencyStatus == DependencyStatus.Available)
                 {
-                    // Set UserID to the same unique ID used for networking
                     if (NetworkPlayer.LocalInstance != null)
                     {
                         string userId = NetworkPlayer.LocalInstance.PlayerUniqueID.Value.ToString();
                         if (!string.IsNullOrEmpty(userId))
                         {
-                            Firebase.Analytics.FirebaseAnalytics.SetUserId(userId);
+                            FirebaseAnalytics.SetUserId(userId);
                         }
                     }
                     else
@@ -52,15 +51,13 @@ namespace Game.Analytics
                         string localUserId = PlayerPrefs.GetString("LocalUserId", "");
                         if (!string.IsNullOrEmpty(localUserId))
                         {
-                            Firebase.Analytics.FirebaseAnalytics.SetUserId(localUserId);
+                            FirebaseAnalytics.SetUserId(localUserId);
                         }
                     }
-
-                    // Enable analytics collection
-                    Firebase.Analytics.FirebaseAnalytics.SetAnalyticsCollectionEnabled(true);
+                    
+                    FirebaseAnalytics.SetAnalyticsCollectionEnabled(true);
 
                     _isInitialized = true;
-                    Debug.Log("[FirebaseAnalyticsManager] Firebase Analytics initialized successfully.");
                 }
                 else
                 {

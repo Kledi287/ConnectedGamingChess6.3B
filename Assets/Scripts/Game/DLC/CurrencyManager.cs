@@ -22,25 +22,23 @@ namespace Game.DLC
         private void Start()
         {
             playerCoins = PlayerPrefs.GetInt("PlayerCoins", 1000);
+            
+            //Uncomment for testing purposes
+            //ResetPlayerProgress();
         }
     
         void Update()
         {
             currencyText.text = playerCoins.ToString();
         }
-
-        /// <summary>
-        /// Tries to spend 'amount' coins from the player's balance.
-        /// Returns true if successful; false if insufficient funds.
-        /// </summary>
+        
         public bool TrySpendCoins(int amount)
         {
             if (playerCoins >= amount)
             {
                 playerCoins -= amount;
                 Debug.Log($"[CurrencyManager] Spent {amount} coins. Remaining: {playerCoins}");
-
-                // Save after spending
+                
                 PlayerPrefs.SetInt("PlayerCoins", playerCoins);
                 PlayerPrefs.Save();
                 return true;
@@ -51,7 +49,26 @@ namespace Game.DLC
                 return false;
             }
         }
+
+        public void ResetPlayerProgress()
+        {
+            playerCoins = 1000;
+            PlayerPrefs.SetInt("PlayerCoins", playerCoins);
+            
+            PlayerPrefs.DeleteKey("OwnedSkins");
+            
+            PlayerPrefs.DeleteKey("CurrentWhiteSkin");
+            PlayerPrefs.DeleteKey("CurrentBlackSkin");
+            
+            PlayerPrefs.Save();
+            
+            Debug.Log("[CurrencyManager] Player progress reset: 1000 coins, no skins");
+            
+            if (DLCStoreUI.Instance != null)
+            {
+                DLCStoreUI.Instance.LoadOwnedSkins();
+                Debug.Log("[CurrencyManager] DLCStoreUI refreshed");
+            }
+        }
     }
 }
-
-

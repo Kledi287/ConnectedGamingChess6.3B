@@ -63,8 +63,6 @@ namespace Game.DLC
             }
         }
         
-        // Fixed version of the ApplySkinToAllPieces method for DLCManager.cs
-
         public void ApplySkinToAllPieces(List<GameObject> pieces, Texture2D texture)
         {
             if (pieces == null || pieces.Count == 0 || texture == null)

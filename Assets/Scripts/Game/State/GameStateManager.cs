@@ -35,7 +35,6 @@ namespace Game.State
 
         private void Start()
         {
-            // Subscribe to game events
             GameManager.NewGameStartedEvent += OnNewGameStarted;
             GameManager.GameEndedEvent += OnGameEnded;
             GameManager.MoveExecutedEvent += OnMoveExecuted;
@@ -43,7 +42,6 @@ namespace Game.State
 
         private void OnDestroy()
         {
-            // Unsubscribe from game events
             GameManager.NewGameStartedEvent -= OnNewGameStarted;
             GameManager.GameEndedEvent -= OnGameEnded;
             GameManager.MoveExecutedEvent -= OnMoveExecuted;
@@ -66,11 +64,9 @@ namespace Game.State
 
         private void OnNewGameStarted()
         {
-            // Generate a unique match ID
             currentMatchId = GenerateMatchId();
             matchStartTime = DateTime.UtcNow;
-
-            // Track match start in Analytics (this can happen on client or server)
+            
             bool isMultiplayer = NetworkManager.Singleton != null && 
                                 (NetworkManager.Singleton.IsServer || NetworkManager.Singleton.IsClient);
             
@@ -78,8 +74,7 @@ namespace Game.State
             {
                 Game.Analytics.FirebaseAnalyticsManager.Instance.LogMatchStart(isMultiplayer, currentMatchId);
             }
-
-            // Only save game state if we're on the server
+            
             if (NetworkManager.Singleton == null || NetworkManager.Singleton.IsServer)
             {
                 SaveGameState("initialState");
@@ -91,19 +86,15 @@ namespace Game.State
         private void OnGameEnded()
         {
             if (string.IsNullOrEmpty(currentMatchId)) return;
-
-            // Get match details
+            
             int totalMoves = GameManager.Instance.LatestHalfMoveIndex;
             TimeSpan duration = DateTime.UtcNow - matchStartTime;
             int durationSeconds = (int)duration.TotalSeconds;
 
-            // Determine outcome
             string outcome = "unknown";
             
-            // Check if TryGetCurrent returns true, which means there is a current half-move
             if (GameManager.Instance.HalfMoveTimeline.TryGetCurrent(out UnityChess.HalfMove lastMove))
             {
-                // Now we can check properties on lastMove
                 if (lastMove.CausedCheckmate)
                 {
                     outcome = $"{lastMove.Piece.Owner}_win";
@@ -113,14 +104,12 @@ namespace Game.State
                     outcome = "draw_stalemate";
                 }
             }
-
-            // Only save game state if we're on the server
+            
             if (NetworkManager.Singleton == null || NetworkManager.Singleton.IsServer)
             {
                 SaveGameState("endState");
             }
-
-            // Track match end in Analytics (this can happen on client or server)
+            
             bool isMultiplayer = NetworkManager.Singleton != null && 
                                 (NetworkManager.Singleton.IsServer || NetworkManager.Singleton.IsClient);
             
@@ -140,10 +129,8 @@ namespace Game.State
 
         private void OnMoveExecuted()
         {
-            // Only save game state if we're on the server
             if (NetworkManager.Singleton == null || NetworkManager.Singleton.IsServer)
             {
-                // Save game state after every few moves to avoid excessive writes
                 if (GameManager.Instance.LatestHalfMoveIndex % 5 == 0)
                 {
                     SaveGameState("midgameState");
@@ -154,17 +141,14 @@ namespace Game.State
         #endregion
 
         #region Game State Management
-
-        // Generate a unique match ID
+        
         private string GenerateMatchId()
         {
             return $"match_{DateTime.UtcNow.Ticks}_{UnityEngine.Random.Range(1000, 9999)}";
         }
-
-        // Save the current game state to Firestore
+        
         public void SaveGameState(string stateType)
         {
-            // Only the server should save game states to Firestore
             if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer)
             {
                 Debug.Log("[GameStateManager] Skipping game state save - not running on server");
@@ -189,13 +173,11 @@ namespace Game.State
                     { "stateType", stateType },
                     { "moveIndex", GameManager.Instance.LatestHalfMoveIndex },
                     { "timestamp", Timestamp.FromDateTime(DateTime.UtcNow) },
-                    // Only access ConnectedClientsList on server
                     { "playerCount", (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer) 
                         ? NetworkManager.Singleton.ConnectedClientsList.Count 
                         : 1 }
                 };
-
-                // Add player-specific info if this is a multiplayer game on the server
+                
                 if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
                 {
                     Dictionary<string, object> players = new Dictionary<string, object>();
@@ -215,8 +197,7 @@ namespace Game.State
                     
                     gameStateData["players"] = players;
                 }
-
-                // Add current skins info
+                
                 if (NetworkChessManager.Instance != null)
                 {
                     Dictionary<string, string> skinInfo = new Dictionary<string, string>
@@ -255,8 +236,7 @@ namespace Game.State
                 Debug.LogError($"[GameStateManager] Error saving game state: {e.Message}");
             }
         }
-
-        // Load a game state from a specific match and restore it
+        
         public async Task<bool> LoadGameState(string matchId, int moveIndex = -1)
         {
             if (firestoreDb == null)
@@ -267,7 +247,6 @@ namespace Game.State
 
             try
             {
-                // Use a simpler query that doesn't require a complex index
                 Query query = firestoreDb.Collection("game_states")
                     .WhereEqualTo("matchId", matchId);
                     
@@ -281,7 +260,6 @@ namespace Game.State
 
                 DocumentSnapshot document;
                 
-                // If a specific move index is provided, find that one
                 if (moveIndex >= 0)
                 {
                     document = snapshot.Documents.FirstOrDefault(doc => 
@@ -293,7 +271,6 @@ namespace Game.State
                         return false;
                     }
                 }
-                // Otherwise, find the latest move manually
                 else
                 {
                     document = snapshot.Documents
@@ -303,40 +280,30 @@ namespace Game.State
                 
                 if (document != null && document.Exists)
                 {
-                    // Get the serialized game state
                     string serializedGame = document.GetValue<string>("gameState");
                     
-                    // Load the game state locally first to determine whose turn it is
                     GameManager.Instance.LoadGame(serializedGame, true);
                     
-                    // Determine whose turn it is after loading
                     bool isWhiteTurn = GameManager.Instance.SideToMove == UnityChess.Side.White;
                     
-                    // If this is the server in a networked game, sync to all clients
                     if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
                     {
                         try
                         {
-                            // Sync the board state first
                             NetworkChessManager.Instance.SyncBoardToOneClientRpc(serializedGame);
                             
-                            // Wait a moment for the board to initialize on clients
                             await Task.Delay(300);
                             
-                            // First set the turn state directly on the server
                             if (TurnManager.Instance != null)
                             {
                                 TurnManager.Instance.IsWhiteTurn.Value = isWhiteTurn;
                                 Debug.Log($"[Server] Set turn state directly: WhiteTurn = {isWhiteTurn}");
                             }
                             
-                            // Now notify clients about the turn state (for visual updates)
                             NetworkChessManager.Instance.SyncTurnStateClientRpc(isWhiteTurn);
                             
-                            // Wait a bit more before applying skins
                             await Task.Delay(200);
                             
-                            // Sync skin information if available
                             if (document.TryGetValue<Dictionary<string, object>>("skins", out var skinData))
                             {
                                 if (skinData.TryGetValue("whiteSkin", out object whiteSkinObj) && whiteSkinObj is string whiteSkin && !string.IsNullOrEmpty(whiteSkin))
@@ -355,9 +322,7 @@ namespace Game.State
                             Debug.LogError($"[GameStateManager] Error syncing game state to clients: {ex.Message}");
                         }
                     }
-                    // Client already loaded the state locally above
                     
-                    // Update the current match ID to the loaded match
                     currentMatchId = matchId;
                     
                     Debug.Log($"[GameStateManager] Game state loaded successfully for match: {matchId}");
@@ -375,8 +340,7 @@ namespace Game.State
                 return false;
             }
         }
-
-        // Get a list of saved game states for display
+        
         public async Task<List<SavedGameInfo>> GetSavedGameStates(int limit = 10)
         {
             List<SavedGameInfo> savedGames = new List<SavedGameInfo>();
@@ -389,12 +353,10 @@ namespace Game.State
 
             try
             {
-                // Use a simpler query that doesn't require a complex index
                 Query query = firestoreDb.Collection("game_states");
                     
                 QuerySnapshot snapshot = await query.GetSnapshotAsync();
                 
-                // Process results manually on the client side
                 Dictionary<string, SavedGameInfo> latestMoveByMatch = new Dictionary<string, SavedGameInfo>();
                 
                 foreach (DocumentSnapshot document in snapshot.Documents)
@@ -405,7 +367,6 @@ namespace Game.State
                         long moveIndex = document.GetValue<long>("moveIndex");
                         string stateType = document.GetValue<string>("stateType");
                         
-                        // We're looking for endState games or the latest move for each match
                         if (stateType == "endState" || !latestMoveByMatch.ContainsKey(matchId) || 
                             latestMoveByMatch[matchId].MoveCount < moveIndex)
                         {
@@ -423,11 +384,9 @@ namespace Game.State
                     }
                 }
                 
-                // Convert dictionary to list and sort by timestamp
                 savedGames = latestMoveByMatch.Values.ToList();
                 savedGames.Sort((a, b) => b.Timestamp.CompareTo(a.Timestamp));
                 
-                // Limit the number of results
                 if (savedGames.Count > limit)
                 {
                     savedGames = savedGames.Take(limit).ToList();
@@ -444,8 +403,7 @@ namespace Game.State
         }
 
         #endregion
-
-        // Class to represent saved game information
+        
         public class SavedGameInfo
         {
             public string MatchId { get; set; }

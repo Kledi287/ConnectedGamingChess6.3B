@@ -84,8 +84,7 @@ public class BoardManager : MonoBehaviourSingleton<BoardManager>
             Resources.Load("PieceSets/Marble/" + modelName) as GameObject,
             positionMap[position].transform
         );
-
-        // Assign correct color to VisualPiece
+        
         VisualPiece vp = pieceGO.GetComponent<VisualPiece>();
         if (vp != null)
         {
@@ -154,13 +153,11 @@ public class BoardManager : MonoBehaviourSingleton<BoardManager>
     public List<GameObject> GetAllWhitePieces()
     {
         List<GameObject> whitePieces = new List<GameObject>();
-
-        // We already have VisualPiece components for each piece
+        
         VisualPiece[] allVisualPieces = GetComponentsInChildren<VisualPiece>(true);
 
         foreach (VisualPiece vp in allVisualPieces)
         {
-            // If you define "Side.White" for White pieces
             if (vp.PieceColor == UnityChess.Side.White)
             {
                 whitePieces.Add(vp.gameObject);
@@ -173,8 +170,7 @@ public class BoardManager : MonoBehaviourSingleton<BoardManager>
     public List<GameObject> GetAllBlackPieces()
     {
         List<GameObject> blackPieces = new List<GameObject>();
-    
-        // Use GetComponentsInChildren instead of GetComponentInChildren
+        
         VisualPiece[] allVisualPieces = GetComponentsInChildren<VisualPiece>(true);
     
         foreach (VisualPiece vp in allVisualPieces)

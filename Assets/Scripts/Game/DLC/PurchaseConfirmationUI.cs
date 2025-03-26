@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
+using Game.Analytics;
 using Game.DLC;
 using UnityEngine;
 using UnityEngine.UI;
@@ -12,6 +13,8 @@ namespace Game.DLC
         private int cost;
         private string skinPath;
         private List<GameObject> myPieces;
+        
+        public static event System.Action<string, int> OnPurchaseComplete;
 
         public void Show(int cost, string skinPath, List<GameObject> myPieces)
         {
@@ -24,9 +27,9 @@ namespace Game.DLC
         public void OnConfirmButton()
         {
             // Log the purchase attempt in Analytics
-            if (Game.Analytics.FirebaseAnalyticsManager.Instance != null)
+            if (FirebaseAnalyticsManager.Instance != null)
             {
-                Game.Analytics.FirebaseAnalyticsManager.Instance.LogPurchaseAttempt(skinPath, cost);
+                FirebaseAnalyticsManager.Instance.LogPurchaseAttempt(skinPath, cost);
             }
 
             bool canPurchase = CurrencyManager.Instance.TrySpendCoins(cost);
@@ -37,16 +40,16 @@ namespace Game.DLC
             else
             {
                 DLCStoreUI.Instance.SetSkinOwned(skinPath, true);
-            
+    
                 DLCStoreUI.Instance.OnBuySkin(skinPath, myPieces);
                 
-                // Log the successful purchase in Analytics
-                if (Game.Analytics.FirebaseAnalyticsManager.Instance != null)
+                OnPurchaseComplete?.Invoke(skinPath, cost);
+                
+                if (FirebaseAnalyticsManager.Instance != null)
                 {
-                    Game.Analytics.FirebaseAnalyticsManager.Instance.LogPurchaseComplete(skinPath, cost);
+                    FirebaseAnalyticsManager.Instance.LogPurchaseComplete(skinPath, cost);
                     
-                    // Update user properties after purchase
-                    Game.Analytics.FirebaseAnalyticsManager.Instance.SetUserProperties();
+                    FirebaseAnalyticsManager.Instance.SetUserProperties();
                 }
             }
             panel.SetActive(false);

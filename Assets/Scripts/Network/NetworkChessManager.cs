@@ -100,11 +100,9 @@ public class NetworkChessManager : NetworkBehaviour
         if (string.IsNullOrEmpty(uniqueId))
         {
             Debug.Log($"Player {clientId} connected but has no unique ID yet. Waiting for OnValueChanged...");
-            // We do NOT do anything else here. We'll handle them in OnPlayerUniqueIDChanged.
             return;
         }
-
-        // If the ID is already set, handle them immediately
+        
         HandlePlayerIDSet(clientId, uniqueId);
     }
 
@@ -166,8 +164,7 @@ public class NetworkChessManager : NetworkBehaviour
         }
         return null;
     }
-
-    // Send the current board to a specific client
+    
     private void SendBoardToReconnectingClient(ulong clientId)
     {
         string fenOrPgn = GameManager.Instance.SerializeGame();
@@ -179,11 +176,9 @@ public class NetworkChessManager : NetworkBehaviour
                 TargetClientIds = new[] { clientId }
             }
         };
-
-        // Send the board state
+        
         SyncBoardToOneClientRpc(fenOrPgn, sendParams);
-    
-        // Send current skin states if they exist
+        
         if (!string.IsNullOrEmpty(currentWhiteSkin))
         {
             SyncSkinClientRpc(true, currentWhiteSkin, sendParams);
@@ -200,7 +195,7 @@ public class NetworkChessManager : NetworkBehaviour
     {
         Debug.Log($"[ClientRpc] Loading board for reconnecting/new client.");
 
-        // If your serializer only has the start position, you must store all moves or final position
+        // Serializer only has the start position, you must store all moves or final position
         // Then jump to the final half-move after loading:
         GameManager.Instance.LoadGame(serializedBoard, true);
 
@@ -219,8 +214,7 @@ public class NetworkChessManager : NetworkBehaviour
             Debug.LogWarning($"[Server] Client {clientId} attempted to load a game but is not the host");
             return;
         }
-    
-        // Use the GameStateManager to load the saved state - with corrected namespace
+        
         var gameStateManager = FindObjectOfType<Game.State.GameStateManager>();
         if (gameStateManager != null)
         {
@@ -245,29 +239,23 @@ public class NetworkChessManager : NetworkBehaviour
         try
         {
             ulong clientId = rpcParams.Receive.SenderClientId;
-        
-            // IMPORTANT FIX: Don't check if player.IsWhite.Value matches isWhite
-            // The player might be applying skins to either white or black pieces
-            // regardless of which side they're playing as
+            
             NetworkPlayer player = FindPlayerByClientId(clientId);
             if (player == null)
             {
                 Debug.LogWarning($"[Server] Player {clientId} not found when setting skin");
                 return;
             }
-        
-            // Store the skin path for this side based on the piece color (isWhite)
+            
             if (isWhite)
                 currentWhiteSkin = skinPath;
             else
                 currentBlackSkin = skinPath;
-        
-            // Save the skins to PlayerPrefs for persistence
+            
             SaveCurrentSkins();
         
             Debug.Log($"[Server] Player {clientId} applied skin: {skinPath} for {(isWhite ? "white" : "black")} pieces");
-        
-            // Broadcast to all clients
+            
             SyncSkinClientRpc(isWhite, skinPath);
         }
         catch (Exception ex)
@@ -280,8 +268,7 @@ public class NetworkChessManager : NetworkBehaviour
     public void SyncSkinClientRpc(bool isWhite, string skinPath, ClientRpcParams clientRpcParams = default)
     {
         Debug.Log($"[Client] Received skin update: {skinPath} for {(isWhite ? "white" : "black")} pieces");
-    
-        // Save skin path to PlayerPrefs for persistence across sessions
+        
         if (isWhite)
         {
             PlayerPrefs.SetString("CurrentWhiteSkin", skinPath);
@@ -318,8 +305,7 @@ public class NetworkChessManager : NetworkBehaviour
         {
             ApplySkinToSide(skinPath, pieces);
         }
-    
-        // Log the skin application in Analytics if we're the player who initiated it
+        
         if (Game.Analytics.FirebaseAnalyticsManager.Instance != null && 
             (isLocalPlayerSkin || NetworkPlayer.LocalInstance == null))
         {
@@ -331,7 +317,6 @@ public class NetworkChessManager : NetworkBehaviour
     {
         try
         {
-            // Create a new, filtered list that only contains valid (non-null) GameObjects
             List<GameObject> validPieces = new List<GameObject>();
             
             if (pieces != null)
@@ -345,12 +330,10 @@ public class NetworkChessManager : NetworkBehaviour
                 }
             }
             
-            // If we have no valid pieces, find them again
             if (validPieces.Count == 0)
             {
                 Debug.Log($"[NetworkChessManager] No valid pieces found, getting fresh references");
                 
-                // Get all pieces of the right color from the current board state
                 bool isWhiteSkin = skinPath.Contains("CurrentWhiteSkin");
                 Side pieceSide = isWhiteSkin ? UnityChess.Side.White : UnityChess.Side.Black;
                 
@@ -364,14 +347,12 @@ public class NetworkChessManager : NetworkBehaviour
                 }
             }
             
-            // If we still have no pieces, log and exit
             if (validPieces.Count == 0)
             {
                 Debug.LogWarning($"[NetworkChessManager] Couldn't find any valid {(skinPath.Contains("White") ? "white" : "black")} pieces to apply skin to");
                 return;
             }
             
-            // Download and apply the skin
             Texture2D downloadedTex = await DLCManager.Instance.DownloadSkinAsync(skinPath);
             if (downloadedTex != null)
             {
@@ -393,15 +374,13 @@ public class NetworkChessManager : NetworkBehaviour
     public void SaveGameStateServerRpc(ServerRpcParams rpcParams = default)
     {
         ulong clientId = rpcParams.Receive.SenderClientId;
-    
-        // Only allow the host to save games
+        
         if (clientId != NetworkManager.Singleton.LocalClientId)
         {
             Debug.LogWarning($"[Server] Client {clientId} attempted to save a game but is not the host");
             return;
         }
-    
-        // Use the GameStateManager to save the current state - with corrected namespace
+        
         var gameStateManager = FindObjectOfType<Game.State.GameStateManager>();
         if (gameStateManager != null)
         {
@@ -467,7 +446,6 @@ public class NetworkChessManager : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     public void AnnounceOutcomeServerRpc(string outcomeMessage)
     {
-        // This calls a ClientRpc to show the outcome
         AnnounceOutcomeClientRpc(outcomeMessage);
     }
     

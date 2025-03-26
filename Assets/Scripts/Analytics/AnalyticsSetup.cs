@@ -11,7 +11,6 @@ public class AnalyticsSetup : MonoBehaviour
 
     private void Awake()
     {
-        // Create the necessary instances if they don't already exist
         if (FirebaseAnalyticsManager.Instance == null && analyticsManagerPrefab != null)
         {
             Instantiate(analyticsManagerPrefab);
@@ -31,8 +30,5 @@ public class AnalyticsSetup : MonoBehaviour
     private void Start()
     {
         Debug.Log("[AnalyticsSetup] Analytics and game state management initialized");
-        
-        // You could add automatic demonstration here for testing
-        // GetComponent<GameStateInterface>()?.Invoke("DemonstrateGameStateManagement", 5f);
     }
 }

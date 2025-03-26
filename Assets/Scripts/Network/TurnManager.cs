@@ -8,7 +8,7 @@ public class TurnManager : NetworkBehaviour
     public NetworkVariable<bool> IsWhiteTurn = new NetworkVariable<bool>(
         true,
         NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Server  // Only server can write to this
+        NetworkVariableWritePermission.Server
     );
 
     private void Awake()
@@ -32,7 +32,6 @@ public class TurnManager : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     public void EndTurnServerRpc()
     {
-        // This can only be called on the server
         if (!IsServer)
         {
             Debug.LogWarning("[TurnManager] EndTurnServerRpc must be called on the server!");
@@ -43,7 +42,6 @@ public class TurnManager : NetworkBehaviour
         Debug.Log($"[Server] Turn ended, now it's {(IsWhiteTurn.Value ? "White" : "Black")}'s turn");
     }
     
-    // This method should only be called by the server
     public void SetTurnState(bool isWhiteTurn)
     {
         if (!IsServer)
@@ -55,7 +53,6 @@ public class TurnManager : NetworkBehaviour
         Debug.Log($"[TurnManager] Updating turn state: White's turn = {isWhiteTurn}");
         IsWhiteTurn.Value = isWhiteTurn;
         
-        // Make sure to update the UI
         if (UIManager.Instance != null)
         {
             UIManager.Instance.ValidateIndicators();

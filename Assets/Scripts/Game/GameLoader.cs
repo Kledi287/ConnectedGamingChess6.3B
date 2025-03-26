@@ -7,7 +7,7 @@ using Game.State;
 public class GameLoader : MonoBehaviour
 {
     [SerializeField] private Button loadGameButton;
-    [SerializeField] private InputField gameStringInputField; // Standard Unity UI InputField
+    [SerializeField] private InputField gameStringInputField;
 
     private GameStateManager gameStateManager;
 
@@ -34,7 +34,6 @@ public class GameLoader : MonoBehaviour
         else
         {
             Debug.LogWarning("[GameLoader] Input field is empty or not assigned");
-            // Optionally, load the most recent game when no input is provided
             StartCoroutine(LoadMostRecentGameCoroutine());
         }
     }
@@ -43,13 +42,11 @@ public class GameLoader : MonoBehaviour
     {
         string input = gameStringInputField.text;
         
-        // Check if input looks like a match ID
         if (input.StartsWith("match_"))
         {
             Debug.Log($"[GameLoader] Loading game with ID: {input}");
             StartCoroutine(LoadGame(input));
         }
-        // If it's a serialized game state (FEN/PGN), load directly
         else if (input.Length > 10)
         {
             Debug.Log("[GameLoader] Loading game from serialized state");
@@ -65,7 +62,6 @@ public class GameLoader : MonoBehaviour
     {
         Debug.Log($"[GameLoader] Loading game: {matchId}, move: {moveIndex}");
         
-        // If in networked mode as host, use NetworkChessManager to load and sync
         if (Unity.Netcode.NetworkManager.Singleton != null && 
             Unity.Netcode.NetworkManager.Singleton.IsHost)
         {
@@ -73,10 +69,8 @@ public class GameLoader : MonoBehaviour
             yield break;
         }
         
-        // If local or client, load directly
         var loadTask = gameStateManager.LoadGameState(matchId, moveIndex);
         
-        // Wait for task to complete
         while (!loadTask.IsCompleted)
         {
             yield return null;
