@@ -196,15 +196,47 @@ public class NetworkChessManager : NetworkBehaviour
     }
     
     [ClientRpc]
-    private void SyncBoardToOneClientRpc(string serializedBoard, ClientRpcParams clientRpcParams = default)
+    public void SyncBoardToOneClientRpc(string serializedBoard, ClientRpcParams clientRpcParams = default)
     {
-        Debug.Log($"[ClientRpc] loading board for reconnecting/new client.");
+        Debug.Log($"[ClientRpc] Loading board for reconnecting/new client.");
 
         // If your serializer only has the start position, you must store all moves or final position
         // Then jump to the final half-move after loading:
         GameManager.Instance.LoadGame(serializedBoard, true);
 
         BoardManager.Instance.EnsureOnlyPiecesOfSideAreEnabled(GameManager.Instance.SideToMove);
+    }
+    
+    [ServerRpc(RequireOwnership = false)]
+    public void LoadSavedGameServerRpc(string matchId, int moveIndex, ServerRpcParams rpcParams = default)
+    {
+        ulong clientId = rpcParams.Receive.SenderClientId;
+        Debug.Log($"[Server] Client {clientId} requested to load game: {matchId} at move {moveIndex}");
+    
+        // Only allow the host to load saved games
+        if (clientId != NetworkManager.Singleton.LocalClientId)
+        {
+            Debug.LogWarning($"[Server] Client {clientId} attempted to load a game but is not the host");
+            return;
+        }
+    
+        // Use the GameStateManager to load the saved state - with corrected namespace
+        var gameStateManager = FindObjectOfType<Game.State.GameStateManager>();
+        if (gameStateManager != null)
+        {
+            gameStateManager.LoadGameState(matchId, moveIndex)
+                .ContinueWith(task =>
+                {
+                    if (!task.Result)
+                    {
+                        Debug.LogError($"[Server] Failed to load game: {matchId}");
+                    }
+                });
+        }
+        else
+        {
+            Debug.LogError("[Server] GameStateManager not found - cannot load game state");
+        }
     }
     
     [ServerRpc(RequireOwnership = false)]
@@ -248,12 +280,23 @@ public class NetworkChessManager : NetworkBehaviour
     public void SyncSkinClientRpc(bool isWhite, string skinPath, ClientRpcParams clientRpcParams = default)
     {
         Debug.Log($"[Client] Received skin update: {skinPath} for {(isWhite ? "white" : "black")} pieces");
-        
+    
+        // Save skin path to PlayerPrefs for persistence across sessions
+        if (isWhite)
+        {
+            PlayerPrefs.SetString("CurrentWhiteSkin", skinPath);
+        }
+        else
+        {
+            PlayerPrefs.SetString("CurrentBlackSkin", skinPath);
+        }
+        PlayerPrefs.Save();
+    
         Side pieceSide = isWhite ? UnityChess.Side.White : UnityChess.Side.Black;
-        
+    
         List<GameObject> pieces = new List<GameObject>();
         VisualPiece[] allVisualPieces = BoardManager.Instance.GetComponentsInChildren<VisualPiece>(true);
-        
+    
         foreach (VisualPiece vp in allVisualPieces)
         {
             if (vp.PieceColor == pieceSide)
@@ -261,12 +304,12 @@ public class NetworkChessManager : NetworkBehaviour
                 pieces.Add(vp.gameObject);
             }
         }
-        
+    
         bool isLocalPlayerSkin = NetworkPlayer.LocalInstance != null && 
                                  NetworkPlayer.LocalInstance.IsWhite.Value == isWhite && 
                                  NetworkPlayer.LocalInstance.HasRecentlyChangedSkin && 
                                  NetworkPlayer.LocalInstance.LastChangedSkinPath == skinPath;
-    
+
         if (isLocalPlayerSkin)
         {
             NetworkPlayer.LocalInstance.HasRecentlyChangedSkin = false;
@@ -275,23 +318,102 @@ public class NetworkChessManager : NetworkBehaviour
         {
             ApplySkinToSide(skinPath, pieces);
         }
+    
+        // Log the skin application in Analytics if we're the player who initiated it
+        if (Game.Analytics.FirebaseAnalyticsManager.Instance != null && 
+            (isLocalPlayerSkin || NetworkPlayer.LocalInstance == null))
+        {
+            Game.Analytics.FirebaseAnalyticsManager.Instance.LogSkinApplied(skinPath, isWhite);
+        }
     }
     
     private async void ApplySkinToSide(string skinPath, List<GameObject> pieces)
     {
-        Texture2D downloadedTex = await DLCManager.Instance.DownloadSkinAsync(skinPath);
-        if (downloadedTex != null)
+        try
         {
-            // Since we're already in Unity's main thread after the await, we can directly apply skins
-            DLCManager.Instance.ApplySkinToAllPieces(pieces, downloadedTex);
+            // Create a new, filtered list that only contains valid (non-null) GameObjects
+            List<GameObject> validPieces = new List<GameObject>();
+            
+            if (pieces != null)
+            {
+                foreach (var piece in pieces)
+                {
+                    if (piece != null)
+                    {
+                        validPieces.Add(piece);
+                    }
+                }
+            }
+            
+            // If we have no valid pieces, find them again
+            if (validPieces.Count == 0)
+            {
+                Debug.Log($"[NetworkChessManager] No valid pieces found, getting fresh references");
+                
+                // Get all pieces of the right color from the current board state
+                bool isWhiteSkin = skinPath.Contains("CurrentWhiteSkin");
+                Side pieceSide = isWhiteSkin ? UnityChess.Side.White : UnityChess.Side.Black;
+                
+                VisualPiece[] allVisualPieces = BoardManager.Instance.GetComponentsInChildren<VisualPiece>(true);
+                foreach (VisualPiece vp in allVisualPieces)
+                {
+                    if (vp != null && vp.PieceColor == pieceSide)
+                    {
+                        validPieces.Add(vp.gameObject);
+                    }
+                }
+            }
+            
+            // If we still have no pieces, log and exit
+            if (validPieces.Count == 0)
+            {
+                Debug.LogWarning($"[NetworkChessManager] Couldn't find any valid {(skinPath.Contains("White") ? "white" : "black")} pieces to apply skin to");
+                return;
+            }
+            
+            // Download and apply the skin
+            Texture2D downloadedTex = await DLCManager.Instance.DownloadSkinAsync(skinPath);
+            if (downloadedTex != null)
+            {
+                Debug.Log($"[NetworkChessManager] Applying skin {skinPath} to {validPieces.Count} pieces");
+                DLCManager.Instance.ApplySkinToAllPieces(validPieces, downloadedTex);
+            }
+            else
+            {
+                Debug.LogError($"[NetworkChessManager] Failed to download skin: {skinPath}");
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Debug.LogError($"[NetworkChessManager] Failed to download skin: {skinPath}");
+            Debug.LogError($"[NetworkChessManager] Error in ApplySkinToSide: {ex.Message}\n{ex.StackTrace}");
         }
     }
     
-    // The existing code for handling moves (unchanged)
+    [ServerRpc(RequireOwnership = false)]
+    public void SaveGameStateServerRpc(ServerRpcParams rpcParams = default)
+    {
+        ulong clientId = rpcParams.Receive.SenderClientId;
+    
+        // Only allow the host to save games
+        if (clientId != NetworkManager.Singleton.LocalClientId)
+        {
+            Debug.LogWarning($"[Server] Client {clientId} attempted to save a game but is not the host");
+            return;
+        }
+    
+        // Use the GameStateManager to save the current state - with corrected namespace
+        var gameStateManager = FindObjectOfType<Game.State.GameStateManager>();
+        if (gameStateManager != null)
+        {
+            gameStateManager.SaveGameState("manualSave");
+            Debug.Log("[Server] Game state saved manually");
+        }
+        else
+        {
+            Debug.LogError("[Server] GameStateManager not found - cannot save game state");
+        }
+    }
+    
     [ServerRpc(RequireOwnership = false)]
     public void RequestMoveServerRpc(Vector2Int from, Vector2Int to, ServerRpcParams rpcParams = default)
     {
@@ -427,7 +549,6 @@ public class NetworkChessManager : NetworkBehaviour
     
     private void LoadSavedSkins()
     {
-        // Load saved skins but only if they exist and AutoApplySkins is enabled
         if (PlayerPrefs.GetInt("AutoApplySkins", 0) != 1)
         {
             Debug.Log("[NetworkChessManager] Skipping automatic skin loading (disabled in preferences)");
@@ -455,7 +576,6 @@ public class NetworkChessManager : NetworkBehaviour
     
     private void ApplyLoadedSkin(bool isWhite, string skinPath)
     {
-        // Only apply on the server or in single player mode
         if (!IsServer && !NetworkManager.Singleton.IsHost) return;
     
         List<GameObject> pieces = isWhite ? 
@@ -463,11 +583,60 @@ public class NetworkChessManager : NetworkBehaviour
             BoardManager.Instance.GetAllBlackPieces();
     
         ApplySkinToSide(skinPath, pieces);
-    
-        // If we're in multiplayer, also broadcast to clients
+        
         if (NetworkManager.Singleton.IsServer)
         {
             SyncSkinClientRpc(isWhite, skinPath);
         }
+    }
+    
+    [ClientRpc]
+    public void SyncTurnStateClientRpc(bool isWhiteTurn, ClientRpcParams clientRpcParams = default)
+    {
+        Debug.Log($"[NetworkChessManager] Syncing turn state: WhiteTurn = {isWhiteTurn}");
+        
+        // Check if we're the server - only the server can modify NetworkVariables
+        if (NetworkManager.Singleton.IsServer)
+        {
+            // Update TurnManager's NetworkVariable directly
+            if (TurnManager.Instance != null)
+            {
+                TurnManager.Instance.IsWhiteTurn.Value = isWhiteTurn;
+            }
+        }
+        else
+        {
+            // For clients, we need to request the server to make this change
+            // Instead of modifying the NetworkVariable directly, just use the value for visual updates
+            Debug.Log($"[Client] Received turn state update: WhiteTurn = {isWhiteTurn}");
+        }
+        
+        // These operations are safe for both client and server - they don't modify NetworkVariables
+        
+        // Update BoardManager to enable the correct pieces
+        if (BoardManager.Instance != null)
+        {
+            // This will enable pieces for the side whose turn it is
+            Side sideToMove = isWhiteTurn ? UnityChess.Side.White : UnityChess.Side.Black;
+            BoardManager.Instance.EnsureOnlyPiecesOfSideAreEnabled(sideToMove);
+            
+            // Reset the visual state of all pieces
+            foreach (var visualPiece in BoardManager.Instance.GetComponentsInChildren<VisualPiece>())
+            {
+                if (visualPiece != null && visualPiece.transform.parent != null)
+                {
+                    // Reset position to parent square's position
+                    visualPiece.transform.position = visualPiece.transform.parent.position;
+                }
+            }
+        }
+        
+        // Update UI to show whose turn it is (this doesn't modify NetworkVariables)
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.ValidateIndicators();
+        }
+        
+        Debug.Log($"[{(NetworkManager.Singleton.IsServer ? "Server" : "Client")}] Turn sync complete. Active player: {(isWhiteTurn ? "White" : "Black")}");
     }
 }

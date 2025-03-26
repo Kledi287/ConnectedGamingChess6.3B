@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 using Firebase.Storage;
@@ -19,7 +20,6 @@ namespace Game.DLC
 
         public async Task<Texture2D> DownloadSkinAsync(string skinPath)
         {
-            // Check if texture is already cached
             if (textureCache.ContainsKey(skinPath))
                 return textureCache[skinPath];
             
@@ -63,39 +63,63 @@ namespace Game.DLC
             }
         }
         
+        // Fixed version of the ApplySkinToAllPieces method for DLCManager.cs
+
         public void ApplySkinToAllPieces(List<GameObject> pieces, Texture2D texture)
         {
-            if (pieces == null || pieces.Count == 0)
+            if (pieces == null || pieces.Count == 0 || texture == null)
             {
-                Debug.LogWarning("[DLCManager] Cannot apply skin - no pieces provided");
+                Debug.LogWarning("[DLCManager] Cannot apply skin - no valid pieces or texture provided");
                 return;
             }
-    
+
             string debugInfo = "";
             int count = 0;
-    
+            int failedCount = 0;
+
             foreach (GameObject pieceGO in pieces)
             {
-                Renderer pieceRenderer = pieceGO.GetComponentInChildren<Renderer>();
-                if (pieceRenderer != null)
+                // Skip null pieces
+                if (pieceGO == null)
                 {
-                    pieceRenderer.material.mainTexture = texture;
-                    count++;
-            
-                    // Include piece info in debug log
-                    VisualPiece vp = pieceGO.GetComponent<VisualPiece>();
-                    if (vp != null && debugInfo.Length < 100)
+                    failedCount++;
+                    continue;
+                }
+        
+                try
+                {
+                    Renderer pieceRenderer = pieceGO.GetComponentInChildren<Renderer>();
+                    if (pieceRenderer != null && pieceRenderer.material != null)
                     {
-                        debugInfo += $"{vp.PieceColor} {pieceGO.name}, ";
+                        pieceRenderer.material.mainTexture = texture;
+                        count++;
+            
+                        // Include piece info in debug log
+                        VisualPiece vp = pieceGO.GetComponent<VisualPiece>();
+                        if (vp != null && debugInfo.Length < 100)
+                        {
+                            debugInfo += $"{vp.PieceColor} {pieceGO.name}, ";
+                        }
+                    }
+                    else
+                    {
+                        failedCount++;
+                        Debug.LogWarning($"[DLCManager] No valid Renderer found on '{pieceGO.name}'!");
                     }
                 }
-                else
+                catch (MissingReferenceException)
                 {
-                    Debug.LogWarning($"[DLCManager] No Renderer found on '{pieceGO.name}'!");
+                    failedCount++;
+                    Debug.LogWarning("[DLCManager] Skipping destroyed piece GameObject");
+                }
+                catch (Exception ex)
+                {
+                    failedCount++;
+                    Debug.LogError($"[DLCManager] Error applying skin to piece: {ex.Message}");
                 }
             }
-    
-            Debug.Log($"[DLCManager] Applied skin to {count}/{pieces.Count} pieces. First few: {debugInfo}");
+
+            Debug.Log($"[DLCManager] Applied skin to {count}/{pieces.Count} pieces. Failed: {failedCount}. First few: {debugInfo}");
         }
     }
 }

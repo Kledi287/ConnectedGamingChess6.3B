@@ -23,6 +23,12 @@ namespace Game.DLC
 
         public void OnConfirmButton()
         {
+            // Log the purchase attempt in Analytics
+            if (Game.Analytics.FirebaseAnalyticsManager.Instance != null)
+            {
+                Game.Analytics.FirebaseAnalyticsManager.Instance.LogPurchaseAttempt(skinPath, cost);
+            }
+
             bool canPurchase = CurrencyManager.Instance.TrySpendCoins(cost);
             if (!canPurchase)
             {
@@ -33,6 +39,15 @@ namespace Game.DLC
                 DLCStoreUI.Instance.SetSkinOwned(skinPath, true);
             
                 DLCStoreUI.Instance.OnBuySkin(skinPath, myPieces);
+                
+                // Log the successful purchase in Analytics
+                if (Game.Analytics.FirebaseAnalyticsManager.Instance != null)
+                {
+                    Game.Analytics.FirebaseAnalyticsManager.Instance.LogPurchaseComplete(skinPath, cost);
+                    
+                    // Update user properties after purchase
+                    Game.Analytics.FirebaseAnalyticsManager.Instance.SetUserProperties();
+                }
             }
             panel.SetActive(false);
         }
@@ -43,6 +58,3 @@ namespace Game.DLC
         }
     }
 }
-
-
-
